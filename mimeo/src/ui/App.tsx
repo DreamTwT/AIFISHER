@@ -407,7 +407,7 @@ function EditorShell() {
 
 
   return (
-    <div className="app">
+    <div className={`app${inspectorOpen ? ' with-inspector' : ''}`}>
       <TopBar inspectorOpen={inspectorOpen} onToggleInspector={toggleInspector} />
       <div className="workspace">
         <LeftRail tool={tool} setTool={setTool} />

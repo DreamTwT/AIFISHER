@@ -1070,14 +1070,21 @@
 
 .toasts {
   position: fixed;
-  left: 16px;
-  bottom: 60px;
+  top: calc(var(--topbar-h) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 500;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 7px;
-  max-width: 380px;
+  width: min(400px, calc(100vw - 32px));
   pointer-events: none;
+}
+
+/* 让提示浮层居中于画布，而不是整个窗口（右侧检查器宽 306px） */
+.app.with-inspector .toasts {
+  left: calc(50% - 123px);
 }
 
 .toast {
@@ -1085,11 +1092,12 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  max-width: 100%;
   padding: 9px 11px;
-  border-radius: 9px;
-  border: 1px solid var(--border-strong);
-  background: rgba(26, 21, 16, 0.96);
-  box-shadow: 3px 3px 0 rgba(26, 21, 16, 0.18);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 248, 236, 0.2);
+  background: rgba(26, 21, 16, 0.97);
+  box-shadow: 4px 4px 0 rgba(26, 21, 16, 0.14), 0 10px 28px rgba(26, 21, 16, 0.16);
   font-size: 11.5px;
   color: #fff8ec;
   animation: toast-in 0.18s ease;
@@ -1099,7 +1107,7 @@
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(-6px);
   }
 }
 
@@ -1920,6 +1928,9 @@
   }
   .sheet-title p {
     white-space: normal;
+  }
+  .app.with-inspector .toasts {
+    left: 50%;
   }
   .lightbox-side {
     display: none;
