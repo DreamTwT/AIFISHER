@@ -1,0 +1,36 @@
+const PATHS: Record<string, string> = {
+  needle: '<path d="M20 4 9 15"/><path d="m4 20 3.2-.8L9 15l-2-2-4.2 1.8z"/><path d="M14.5 9.5 11 6l7-3z"/>',
+  prompt: '<path d="M4 5h16"/><path d="M4 12h10"/><path d="M4 19h13"/>',
+  render: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m8 13 3-3 3 3 2-2 3 3"/><circle cx="9" cy="8.4" r="1.2"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/>',
+  weave: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
+  play: '<path d="M7 4.5v15l12-7.5z"/>',
+  undo: '<path d="M9 7 4 12l5 5"/><path d="M4 12h9a7 7 0 0 1 7 7v1"/>',
+  redo: '<path d="m15 7 5 5-5 5"/><path d="M20 12h-9a7 7 0 0 0-7 7v1"/>',
+  fit: '<path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>',
+  plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  close: '<path d="m6 6 12 12"/><path d="m18 6-12 12"/>',
+  trash: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m6 7 1 13h10l1-13"/><path d="M10 11v6M14 11v6"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/>',
+  upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>',
+  settings: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/>',
+  folder: '<path d="M3 6.5h7l2 2h9v10H3z"/><path d="M3 8.5V5h6l2 2"/>',
+  book: '<path d="M4 4.5h6a3 3 0 0 1 3 3V20a2.5 2.5 0 0 0-2.5-2.5H4z"/><path d="M20 4.5h-6a3 3 0 0 0-3 3V20a2.5 2.5 0 0 1 2.5-2.5H20z"/>',
+  closePanel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  command: '<path d="M9 9v6h6V9z"/><path d="M9 9H7a2 2 0 1 1 2-2z"/><path d="M15 9h2a2 2 0 1 0-2-2z"/><path d="M9 15H7a2 2 0 1 0 2 2z"/><path d="M15 15h2a2 2 0 1 1-2 2z"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
+  chevron: '<path d="m8 10 4 4 4-4"/>',
+  check: '<path d="m5 12 4.5 4.5L19 7"/>',
+  refresh: '<path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.5 10a7 7 0 0 0-12-3.4L4 9"/><path d="M5.5 14a7 7 0 0 0 12 3.4L20 15"/>',
+  link: '<path d="M10 13a4 4 0 0 0 5.7 0l3-3A4 4 0 0 0 13 4.3l-1.7 1.7"/><path d="M14 11a4 4 0 0 0-5.7 0l-3 3A4 4 0 0 0 11 19.7l1.7-1.7"/>',
+  spark: '<path d="M12 3v5M12 16v5M3 12h5M16 12h5"/><path d="m6 6 3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/>',
+  dots: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  grid: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 10h16M4 15h16M10 4v16M15 4v16"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/>',
+  arrow: '<path d="M5 12h14"/><path d="m14 7 5 5-5 5"/>',
+};
+
+export function icon(name: keyof typeof PATHS, size = 16): string {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PATHS[name] ?? ''}</svg>`;
+}
