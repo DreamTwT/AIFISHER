@@ -359,4 +359,3 @@ export const GenerateNodeView = memo(GenerateNodeViewInner);
 export function generateSummary(node: GenerateNode): string {
   return node.prompt.trim() || `${node.aspect} · ${node.count} 张`;
 }
-

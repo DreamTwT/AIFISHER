@@ -925,4 +925,3 @@ function accentOf(node: CanvasNode): string {
     group: 'rgba(232,201,138,.5)',
   }[node.kind];
 }
-

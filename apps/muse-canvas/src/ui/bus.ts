@@ -28,4 +28,3 @@ export function legacyOn(name: string, handler: (detail: unknown) => void): () =
   window.addEventListener(name, wrapped);
   return () => window.removeEventListener(name, wrapped);
 }
-
