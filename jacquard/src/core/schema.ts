@@ -127,9 +127,9 @@ export function sanitizeDoc(input: unknown): Doc {
       if (typeof value !== 'string' || !nodeIds.has(value) || claimed.has(value)) continue;
       if (members.includes(value)) continue;
       members.push(value);
-      claimed.add(value);
     }
     if (members.length < 2) continue;
+    members.forEach((member) => claimed.add(member));
     groups.push({
       id: id(record.id, 'group', groupSeen),
       name: text(record.name, `组 ${groups.length + 1}`),
