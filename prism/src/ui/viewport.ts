@@ -786,8 +786,10 @@ export class Viewport {
         caption: file.name,
         title: isVideo ? '视频' : '图片',
       });
-      node.w = 320;
-      node.h = 322;
+      if (isVideo) {
+        node.w = 320;
+        node.h = 322;
+      }
       this.editor.emit();
     }
     const videos = files.filter((file) => file.type.startsWith('video/')).length;
