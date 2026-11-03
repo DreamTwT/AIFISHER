@@ -1,0 +1,117 @@
+import { icon } from './icons';
+
+export function openGuide(): void {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop guide-backdrop';
+  backdrop.innerHTML = `
+    <div class="guide-modal" role="dialog" aria-modal="true" aria-label="使用手册">
+      <header class="guide-head">
+        <div>
+          <div class="eyebrow">PRISM HANDBOOK / 使用手册</div>
+          <h2>从提示词到成品。</h2>
+        </div>
+        <button class="icon-btn" data-act="close" aria-label="关闭">${icon('close', 18)}</button>
+      </header>
+      <div class="guide-scroll">
+        <div class="guide-hero">
+          <svg viewBox="0 0 240 120" aria-hidden="true">
+            <g stroke="currentColor" stroke-width="1" opacity=".16">
+              ${Array.from({ length: 12 }, (_, index) => `<line x1="${index * 20 + 10}" y1="6" x2="${index * 20 + 10}" y2="114" />`).join('')}
+              ${Array.from({ length: 6 }, (_, index) => `<line x1="6" y1="${index * 20 + 10}" x2="234" y2="${index * 20 + 10}" />`).join('')}
+            </g>
+            <rect x="26" y="34" width="52" height="44" rx="3" fill="none" stroke="#6fe3ff" stroke-width="1.5" />
+            <rect x="103" y="26" width="46" height="60" rx="3" fill="#6fe3ff" opacity=".16" stroke="#6fe3ff" stroke-width="1.5" />
+            <rect x="174" y="40" width="40" height="36" rx="3" fill="none" stroke="#ffb184" stroke-width="1.5" />
+            <path d="M78 56 H103" stroke="#6fe3ff" stroke-width="1.5" />
+            <path d="M149 56 H174" stroke="#ffb184" stroke-width="1.5" />
+          </svg>
+          <p>PRISM 是一张本机优先的 AI 图像工作流画布：文本写提示词，生成出图，图片做素材，拼图做排版。所有内容都保存在你自己的浏览器里。</p>
+        </div>
+
+        <section>
+          <span class="guide-no">01</span>
+          <h3>四种节点</h3>
+          <div class="guide-grid">
+            <div><b>文本 · TEXT</b><span>写提示词、方向、风格与光线。本身不出图，连线后成为下游节点的输入。</span></div>
+            <div><b>生成 · GENERATE</b><span>调用真实模型或离线示例。可设置画幅、张数、种子，也可以补充本地提示词。</span></div>
+            <div><b>图片 · IMAGE</b><span>一张现有图片。可上传、从素材库放入，双击查看大图与来源信息。</span></div>
+            <div><b>拼图 · COLLAGE</b><span>把直接连入的图片按列排成一张版面，可单独导出 PNG。</span></div>
+          </div>
+        </section>
+
+        <section>
+          <span class="guide-no">02</span>
+          <h3>在画布底部写提示词</h3>
+          <p>点击文本或生成节点，画布正下方会出现对应的输入区。直接输入即可实时写回节点，<kbd>⌘↵</kbd> 运行，<kbd>Esc</kbd> 收起；双击节点会直接聚焦输入区。</p>
+          <p>生成节点的提示词 = 所有上游文本（按距离排序）+ 底部输入区里的本地补充。留空则只读取上游，适合把“画面”和“风格”拆成两个文本节点分别维护。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">03</span>
+          <h3>连线与接口</h3>
+          <p>从节点右侧的圆点按住，拖到另一个节点上松手。连线有方向，会拒绝形成循环的连接；点击连线可以选中它，再按退格删除。</p>
+          <p>只有真正能连接的接口才会出现：文本只能接到生成，图片和生成只能接到拼图。所以文本和图片没有左侧接口，拼图没有右侧接口。拖到不兼容的节点上时，预览线会变红并给出提示。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">04</span>
+          <h3>框选与编组</h3>
+          <p>在空白处拖出选框：只有完全落在框内的节点才会被选中，擦到边缘不会误选。普通点击编组内的节点会选中整组；按住 <kbd>Alt</kbd> 点击或双击，则进入组内只选一个。</p>
+          <p>选中两个以上节点，按 <kbd>⌘G</kbd> 编组，<kbd>⇧⌘G</kbd> 解散。编组会画出虚线框，拖动、复制、删除都作为一组处理；它不会改变连线，也不参与提示词合成。多选检查器里可以直接改组名。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">05</span>
+          <h3>接上真实模型</h3>
+          <p>打开右上角“设置”，填入任意 OpenAI 兼容的图像接口：Base URL、API Key、模型名。PRISM 会向 <code>/images/generations</code> 发请求，同时兼容 <code>b64_json</code> 与 <code>url</code> 两种返回。</p>
+          <p>关闭“离线示例”后，生成节点会走真实接口；如果模型不支持一次多张，会自动退化为逐张请求。Key 只保存在本机 <code>localStorage</code>，不会上传到任何第三方服务。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">06</span>
+          <h3>保存、导出与备份</h3>
+          <p>项目自动保存在浏览器 IndexedDB。导出 JSON 时，画布里用到的图片会以 data URL 一并打包，换一台机器也能完整还原。整幅画布 PNG、拼图 PNG、素材总览 PNG 都可以直接下载。</p>
+          <p>清理浏览器站点数据会删除本地项目。重要的项目请定期导出 JSON。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">07</span>
+          <h3>键盘</h3>
+          <div class="keys-table">
+            <div><kbd>⌘K</kbd><span>命令面板</span></div>
+            <div><kbd>⌘S</kbd><span>保存</span></div>
+            <div><kbd>T / G / W / I</kbd><span>新增文本 / 生成 / 拼图 / 图片节点</span></div>
+            <div><kbd>⌘G / ⇧⌘G</kbd><span>编组 / 解散编组</span></div>
+            <div><kbd>Alt + 点击</kbd><span>进入编组，只选一个节点</span></div>
+            <div><kbd>R</kbd><span>生成选中的节点</span></div>
+            <div><kbd>⌘↵</kbd><span>生成全部</span></div>
+            <div><kbd>F</kbd><span>适应画面</span></div>
+            <div><kbd>空格 + 拖</kbd><span>平移画布</span></div>
+            <div><kbd>⌘ / Ctrl + 滚轮</kbd><span>缩放</span></div>
+            <div><kbd>P</kbd><span>素材总览</span></div>
+            <div><kbd>?</kbd><span>打开这本手册</span></div>
+          </div>
+        </section>
+
+        <section>
+          <span class="guide-no">08</span>
+          <h3>一句话原则</h3>
+          <p class="guide-quote">先把提示词写清楚，再让生成节点去试；一次只改一个变量。</p>
+        </section>
+        <footer class="guide-foot">PRISM · 本机优先的 AI 图像工作台</footer>
+      </div>
+    </div>`;
+  document.body.appendChild(backdrop);
+  const close = (): void => {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+  };
+  backdrop.querySelector('[data-act="close"]')?.addEventListener('click', close);
+  backdrop.addEventListener('mousedown', (event) => {
+    if (event.target === backdrop) close();
+  });
+  const onKey = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', onKey);
+}
