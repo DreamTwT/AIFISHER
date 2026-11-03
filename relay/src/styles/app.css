@@ -2625,6 +2625,12 @@ input[type='range'] {
     display: none;
   }
   .brand-word {
+    display: flex;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    gap: 0;
+  }
+  .brand-word i {
     display: none;
   }
   .canvas-hint {
