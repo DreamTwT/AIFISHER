@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Editor } from '../core/editor';
 import { createNode, starterProject } from '../core/factory';
+import { DEFAULT_MOTION_PROMPT, videoMode, videoPrompt } from '../core/modes';
 import {
   canLink,
   edgeCurve,
@@ -339,6 +340,18 @@ describe('prism graph core', () => {
     expect(editor.node(node.id)?.y).toBe(node.y);
     expect(editor.undo()).toBe(true);
     expect(editor.node(node.id)?.x).toBe(start);
+  });
+
+  it('maps prompt and references to t2v, i2v and it2v', () => {
+    expect(videoMode('', 0)).toBe('t2v');
+    expect(videoMode('镜头推进', 0)).toBe('t2v');
+    expect(videoMode('', 1)).toBe('i2v');
+    expect(videoMode('', 4)).toBe('i2v');
+    expect(videoMode('镜头推进', 1)).toBe('it2v');
+    expect(videoPrompt('', 1)).toBe(DEFAULT_MOTION_PROMPT);
+    expect(videoPrompt('  ', 2)).toBe(DEFAULT_MOTION_PROMPT);
+    expect(videoPrompt('镜头推进', 2)).toBe('镜头推进');
+    expect(videoPrompt('', 0)).toBe('');
   });
 
   it('computes aspect sizes consistently', () => {

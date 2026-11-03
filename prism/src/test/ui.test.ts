@@ -28,6 +28,7 @@ import { groupBounds } from '../core/geometry';
 import type { ID, SceneNode } from '../core/types';
 import { openAssetDetail, openLibrary } from '../ui/library';
 import { renderInspector } from '../ui/inspector';
+import { openModeLauncher } from '../ui/modes';
 import { Viewport, type ViewportHooks } from '../ui/viewport';
 
 const ctx = (): CanvasRenderingContext2D =>
@@ -162,6 +163,19 @@ describe('canvas pointer behaviour', () => {
     expect(host.textContent).toContain('参考');
     expect(host.querySelector('.reference-empty')).not.toBeNull();
     host.remove();
+  });
+
+  it('offers the four creation modes and closes after picking one', () => {
+    let picked = '';
+    openModeLauncher((mode) => {
+      picked = mode;
+    });
+    expect(document.querySelectorAll('.mode-card')).toHaveLength(4);
+    const cards = [...document.querySelectorAll<HTMLElement>('.mode-card')].map((card) => card.dataset.mode);
+    expect(cards).toEqual(['t2i', 't2v', 'i2v', 'it2v']);
+    document.querySelector<HTMLElement>('[data-mode="i2v"]')?.click();
+    expect(picked).toBe('i2v');
+    expect(document.querySelector('.mode-modal')).toBeNull();
   });
 
   it('renames a group from its title on the canvas', () => {

@@ -297,6 +297,7 @@ export async function renderSampleVideo(
   seed: number,
   onProgress?: (value: number) => void,
   signal?: AbortSignal,
+  reference?: HTMLImageElement | null,
 ): Promise<Blob> {
   if (typeof MediaRecorder === 'undefined') {
     throw new Error('当前浏览器不支持离线视频示例（MediaRecorder 不可用）');
@@ -335,7 +336,7 @@ export async function renderSampleVideo(
         return;
       }
       const t = Math.min(1, (performance.now() - started) / (total * 1000));
-      drawDemoFrame(ctx, width, height, prompt, seed, t);
+      drawDemoFrame(ctx, width, height, prompt, seed, t, reference);
       onProgress?.(Math.round(t * 96));
       if (t >= 1) {
         window.clearInterval(timer);
@@ -357,7 +358,12 @@ function drawDemoFrame(
   prompt: string,
   seed: number,
   t: number,
+  reference?: HTMLImageElement | null,
 ): void {
+  if (reference) {
+    drawReferenceFrame(ctx, width, height, reference, seed, t);
+    return;
+  }
   const palette = pickPalette(prompt);
   const random = mulberry32(hashString(prompt) + seed);
   const sky = ctx.createLinearGradient(0, 0, 0, height);
@@ -400,4 +406,66 @@ function drawDemoFrame(
   ctx.lineWidth = 1;
   ctx.strokeRect(width * 0.045, height * 0.045, width * 0.91, height * 0.91);
   ctx.globalAlpha = 1;
+}
+
+/** 图生视频的离线示例：参考图做缓慢推近与横移，再加颗粒、暗角与一道扫光。 */
+function drawReferenceFrame(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  reference: HTMLImageElement,
+  seed: number,
+  t: number,
+): void {
+  const random = mulberry32(hashString(`${seed}:reference`));
+  const zoom = 1.04 + t * 0.1;
+  const panX = (t - 0.5) * width * 0.035;
+  const panY = Math.sin(t * Math.PI) * height * 0.014;
+  const drawW = width * zoom;
+  const drawH = height * zoom;
+  const cover = Math.max(drawW / reference.width, drawH / reference.height);
+  const srcW = drawW / cover;
+  const srcH = drawH / cover;
+  const srcX = Math.max(0, (reference.width - srcW) / 2);
+  const srcY = Math.max(0, (reference.height - srcH) / 2);
+  ctx.fillStyle = '#070b12';
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(
+    reference,
+    srcX,
+    srcY,
+    Math.min(srcW, reference.width),
+    Math.min(srcH, reference.height),
+    (width - drawW) / 2 + panX,
+    (height - drawH) / 2 + panY,
+    drawW,
+    drawH,
+  );
+
+  const grain = Math.min(1200, Math.round(width * height * 0.0035));
+  for (let index = 0; index < grain; index += 1) {
+    ctx.fillStyle = index % 2 ? '#eef2f7' : '#0b1220';
+    ctx.globalAlpha = 0.025 + random() * 0.05;
+    ctx.fillRect(random() * width, random() * height, 1.2, 1.2);
+  }
+  ctx.globalAlpha = 1;
+
+  // 缓慢扫过的高光，让静止图片在离线示例里也有运动感。
+  const sweep = ((t * 1.15) % 1) * width * 1.4 - width * 0.2;
+  const light = ctx.createLinearGradient(sweep - width * 0.16, 0, sweep + width * 0.16, height);
+  light.addColorStop(0, 'rgba(238, 242, 247, 0)');
+  light.addColorStop(0.5, 'rgba(238, 242, 247, 0.14)');
+  light.addColorStop(1, 'rgba(238, 242, 247, 0)');
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, width, height);
+
+  const vignette = ctx.createRadialGradient(width / 2, height / 2, Math.min(width, height) * 0.32, width / 2, height / 2, Math.max(width, height) * 0.72);
+  vignette.addColorStop(0, 'rgba(7, 11, 18, 0)');
+  vignette.addColorStop(1, 'rgba(7, 11, 18, 0.34)');
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(238, 242, 247, 0.22)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(width * 0.045, height * 0.045, width * 0.91, height * 0.91);
 }

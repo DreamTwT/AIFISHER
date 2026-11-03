@@ -161,6 +161,7 @@ export interface AddAssetOptions {
   seed?: number;
   model?: string;
   source?: 'upload' | 'render';
+  mode?: string;
 }
 
 export async function addAsset(blob: Blob, options: AddAssetOptions = {}): Promise<AssetMeta> {
@@ -205,6 +206,7 @@ export async function addAsset(blob: Blob, options: AddAssetOptions = {}): Promi
     prompt: options.prompt,
     seed: options.seed,
     model: options.model,
+    mode: options.mode,
   };
   const record: AssetRecord = { ...meta, blob };
   await putAsset(record);

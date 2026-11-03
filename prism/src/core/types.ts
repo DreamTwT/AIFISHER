@@ -137,6 +137,8 @@ export interface AssetMeta {
   prompt?: string;
   seed?: number;
   model?: string;
+  /** 生成模式，例如「图生视频」；仅生成素材有 */
+  mode?: string;
 }
 
 export interface AssetRecord extends AssetMeta {

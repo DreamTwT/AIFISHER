@@ -230,6 +230,7 @@ export function sanitizeProjectFile(input: unknown): ProjectFile {
           createdAt: number(metaRaw.createdAt, Date.now()),
           source: metaRaw.source === 'upload' ? 'upload' : 'render',
           kind: metaRaw.kind === 'video' ? 'video' : metaRaw.kind === 'image' ? 'image' : undefined,
+          mode: typeof metaRaw.mode === 'string' ? metaRaw.mode : undefined,
           duration: typeof metaRaw.duration === 'number' ? metaRaw.duration : undefined,
           prompt: typeof metaRaw.prompt === 'string' ? metaRaw.prompt : undefined,
           seed: typeof metaRaw.seed === 'number' ? metaRaw.seed : undefined,

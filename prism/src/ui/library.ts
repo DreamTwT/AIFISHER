@@ -41,7 +41,7 @@ export function openLibrary(options: LibraryOptions): void {
         ${options.onUseMany ? '<button class="btn primary" data-act="place" disabled>放入画布</button>' : ''}
         <button class="btn danger" data-act="delete" disabled>删除所选</button>
       </div>
-      <footer class="library-foot"><span class="library-stat"></span><span>图片保存在本机 IndexedDB，可随项目一并导出</span></footer>
+      <footer class="library-foot"><span class="library-stat"></span><span>素材保存在本机 IndexedDB，可随项目一并导出</span></footer>
     </div>`;
   document.body.appendChild(backdrop);
 
@@ -282,6 +282,7 @@ export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = 
         <dl>
           <div><dt>尺寸</dt><dd>${isVideo || !image ? `${asset.width} × ${asset.height}` : `${image.naturalWidth} × ${image.naturalHeight}`}</dd></div>
           ${asset.duration ? `<div><dt>时长</dt><dd>${asset.duration.toFixed(1)} 秒</dd></div>` : ''}
+          ${asset.mode ? `<div><dt>模式</dt><dd>${escape(asset.mode)}</dd></div>` : ''}
           <div><dt>来源</dt><dd>${asset.source === 'upload' ? '上传' : asset.model || '本机生成'}</dd></div>
           ${asset.seed ? `<div><dt>种子</dt><dd>${asset.seed}</dd></div>` : ''}
           <div><dt>时间</dt><dd>${formatWhen(asset.createdAt)}</dd></div>

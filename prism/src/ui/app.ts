@@ -5,6 +5,7 @@ import { contentBounds, rectsOverlap } from '../core/geometry';
 import { starterProject, STARTER_SAMPLE_PROMPT } from '../core/factory';
 import { hasLiveProvider, settings, subscribeSettings } from '../core/settings';
 import { NODE_LABEL, NODE_SIZE, type ID, type NodeKind, type Project } from '../core/types';
+import { VIDEO_MODE_LABEL, videoMode } from '../core/modes';
 import { formatWhen, isTextTarget } from '../core/util';
 import { renderSample } from '../runtime/demo';
 import { exportCanvas, exportProject, exportWeave, importProject } from '../runtime/export';
@@ -16,6 +17,7 @@ import { openGuide } from './guide';
 import { icon } from './icons';
 import { renderInspector } from './inspector';
 import { openAssetDetail, openLibrary } from './library';
+import { openModeLauncher, type CreationMode } from './modes';
 import { openSettings } from './settings';
 import { showToast } from './toast';
 import { Viewport } from './viewport';
@@ -100,6 +102,7 @@ class App {
       newProject: () => void this.newProject(),
       save: () => void this.saveNow(),
       openLibrary: () => this.openLibrary(),
+      openModes: () => this.openModes(),
       openGuide,
       openSettings: () => openSettings({ onSaved: () => this.syncUI() }),
       exportProject: () => void this.exportProject(),
@@ -166,7 +169,7 @@ class App {
     root.className = 'app';
     root.innerHTML = `
       <header class="topbar">
-        <div class="brand" title="PRISM · 本机优先的 AI 图像与视频工作台">
+        <div class="brand" title="PRISM · 本机优先的 AI 图像与视频无限画布">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 28 28"><path d="M14 3.5 25.5 22.5H2.5Z" stroke="currentColor" stroke-width="1.35" fill="none"/><path d="M1 14h9" stroke="currentColor" stroke-width="1.1"/><path d="m12 14 4.2-3.2M12 14h5.6M12 14l4.2 3.2" stroke="currentColor" stroke-width="1" opacity=".66"/></svg>
           </span>
@@ -178,6 +181,7 @@ class App {
           ${icon('chevron', 12)}
         </button>
         <span class="topbar-divider"></span>
+        <button class="btn ghost mode-trigger" data-act="modes" title="新建：T2I / T2V / I2V / IT2V · N">${icon('plus', 15)} <span class="hide-sm">新建</span></button>
         <button class="icon-btn" data-act="undo" title="撤销 ⌘Z" disabled>${icon('undo', 16)}</button>
         <button class="icon-btn" data-act="redo" title="重做 ⌘⇧Z" disabled>${icon('redo', 16)}</button>
         <div class="topbar-spacer"></div>
@@ -229,14 +233,17 @@ class App {
           </div>
           <div class="canvas-empty" hidden>
             <div class="empty-knot">${icon('layers', 30)}</div>
-            <h2>空画布</h2>
-            <p>先放一个文本节点，写下提示词。</p>
-            <div>
-              <button class="btn primary" data-empty="prompt">${icon('plus', 15)} 新建文本节点</button>
-              <button class="btn" data-empty="library">${icon('folder', 15)} 从素材开始</button>
+            <h2>四种模式，一张无限画布</h2>
+            <p>选一种开始；按住空格向任意方向拖动，画布没有边界。</p>
+            <div class="empty-modes">
+              <button class="mode-chip" data-mode="t2i"><b>T2I</b><span>文生图</span></button>
+              <button class="mode-chip" data-mode="t2v"><b>T2V</b><span>文生视频</span></button>
+              <button class="mode-chip" data-mode="i2v"><b>I2V</b><span>图生视频</span></button>
+              <button class="mode-chip" data-mode="it2v"><b>IT2V</b><span>图文生视频</span></button>
             </div>
+            <button class="btn" data-empty="library">${icon('folder', 15)} 从素材开始</button>
           </div>
-          <div class="canvas-hint"><kbd>双击</kbd> 新建文本节点 <span>·</span> <kbd>空格</kbd> 拖动 <span>·</span> <kbd>⌘</kbd> 滚轮缩放 <span>·</span> 从右侧圆点拖出连线</div>
+          <div class="canvas-hint"><kbd>N</kbd> 四种模式 <span>·</span> <kbd>双击</kbd> 新建文本节点 <span>·</span> <kbd>空格</kbd> 拖动 <span>·</span> <kbd>⌘</kbd> 滚轮缩放 <span>·</span> 从右侧圆点拖出连线</div>
           <div class="minimap-hit" title="小地图">
             <canvas class="minimap" width="296" height="184"></canvas>
             <button class="minimap-globe" data-act="minimap-toggle" title="收起小地图">${icon('grid', 12)}</button>
@@ -285,8 +292,13 @@ class App {
 
   private bindEvents(): void {
     document.addEventListener('click', (event) => {
-      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], [data-add], [data-empty]');
+      const target = (event.target as HTMLElement).closest<HTMLElement>('[data-act], [data-add], [data-empty], [data-mode]');
       if (!target) return;
+      const mode = target.dataset.mode as CreationMode | undefined;
+      if (mode) {
+        this.createFromMode(mode);
+        return;
+      }
       const add = target.dataset.add;
       if (add) {
         this.addNode(add as 'prompt' | 'render' | 'image' | 'weave' | 'video');
@@ -305,6 +317,9 @@ class App {
           break;
         case 'redo':
           this.doRedo();
+          break;
+        case 'modes':
+          this.openModes();
           break;
         case 'library':
           this.openLibrary();
@@ -505,6 +520,9 @@ class App {
       case 'v':
         this.addNode('video');
         break;
+      case 'n':
+        this.openModes();
+        break;
       case 'r':
         void this.runSelection();
         break;
@@ -585,14 +603,20 @@ class App {
     const switching = this.composerNodeId !== node.id;
     const value = node.kind === 'prompt' ? node.text : node.prompt;
     this.composerNodeId = node.id;
-    this.composerKind.textContent = NODE_LABEL[node.kind];
+    const videoModeNow =
+      node.kind === 'video' ? videoMode(this.editor.effectivePrompt(node.id), this.editor.referenceAssets(node.id).length) : null;
+    this.composerKind.textContent = node.kind === 'video' && videoModeNow ? VIDEO_MODE_LABEL[videoModeNow] : NODE_LABEL[node.kind];
     this.composerKind.className = `composer-kind kind-${node.kind}`;
     this.composerName.textContent = node.title || NODE_LABEL[node.kind];
     this.composerInput.placeholder =
       node.kind === 'prompt'
         ? '写下画面、风格与光线…'
         : node.kind === 'video'
-          ? '描述画面、运镜与节奏；参考图从左侧接口连入…'
+          ? videoModeNow === 'i2v'
+            ? '可选：图片怎么动、镜头怎么走；不写就自动用默认运镜…'
+            : videoModeNow === 'it2v'
+              ? '描述运动、镜头与节奏；参考图已经连入…'
+              : '描述画面、运镜与节奏；也可以接图片做图生视频…'
           : '补充一句提示词；留空则读取上游文本…';
     if (switching || document.activeElement !== this.composerInput) this.composerInput.value = value;
     this.composerCount.textContent = `${value.trim().length} 字符`;
@@ -870,6 +894,77 @@ class App {
     this.viewport.ensureVisible(node);
     this.syncUI();
     if (kind === 'prompt' || kind === 'video') this.focusComposer(node.id);
+  }
+
+  private openModes(): void {
+    openModeLauncher((mode) => this.createFromMode(mode));
+  }
+
+  private canvasCenter(): { x: number; y: number } {
+    const camera = this.editor.project.camera;
+    const rect = this.stage.getBoundingClientRect();
+    return {
+      x: (rect.width / 2 - camera.x) / camera.z,
+      y: (rect.height / 2 - camera.y) / camera.z,
+    };
+  }
+
+  /** 四种模式只是四种起点；创建后都变成可继续连线、编组和复用的节点。 */
+  private createFromMode(mode: CreationMode): void {
+    if (mode === 'i2v' || mode === 'it2v') {
+      openLibrary({
+        filter: 'image',
+        onDelete: (assetId) => this.deleteAssets([assetId]),
+        onUse: (assetId) => this.startImageToVideo(assetId, mode === 'it2v'),
+      });
+      return;
+    }
+    const center = this.canvasCenter();
+    this.editor.begin();
+    const promptSpot = this.freeSpot('prompt', { x: center.x - 360, y: center.y });
+    const prompt = this.editor.addNode('prompt', Math.round(promptSpot.x), Math.round(promptSpot.y), {}, false);
+    const kind: NodeKind = mode === 't2i' ? 'render' : 'video';
+    const targetSpot = this.freeSpot(kind, { x: center.x + 40, y: center.y });
+    const target = this.editor.addNode(kind, Math.round(targetSpot.x), Math.round(targetSpot.y), {}, false);
+    this.editor.connect(prompt.id, target.id, false);
+    this.editor.end(true);
+    this.viewport.ensureVisible(target);
+    this.syncUI();
+    this.focusComposer(prompt.id);
+    showToast(mode === 't2i' ? '文生图：写下提示词，⌘↵ 生成' : '文生视频：写下提示词，⌘↵ 生成', 'info');
+  }
+
+  private startImageToVideo(assetId: ID, withText: boolean): void {
+    const meta = getAssetMeta(assetId);
+    if (!meta) return;
+    const center = this.canvasCenter();
+    this.editor.begin();
+    const imageSpot = this.freeSpot('image', { x: center.x - 380, y: center.y + 80 });
+    const image = this.editor.addNode(
+      'image',
+      Math.round(imageSpot.x),
+      Math.round(imageSpot.y),
+      { assetId, caption: meta.name, title: '图片' },
+      false,
+    );
+    const videoSpot = this.freeSpot('video', { x: center.x + 80, y: center.y + 80 });
+    const video = this.editor.addNode('video', Math.round(videoSpot.x), Math.round(videoSpot.y), {}, false);
+    this.editor.connect(image.id, video.id, false);
+    let promptId: ID | null = null;
+    if (withText) {
+      const promptSpot = this.freeSpot('prompt', { x: center.x - 380, y: center.y - 230 });
+      const prompt = this.editor.addNode('prompt', Math.round(promptSpot.x), Math.round(promptSpot.y), {}, false);
+      this.editor.connect(prompt.id, video.id, false);
+      promptId = prompt.id;
+    }
+    this.editor.end(true);
+    this.viewport.ensureVisible(video);
+    this.syncUI();
+    this.focusComposer(promptId ?? video.id);
+    showToast(
+      withText ? '图文生视频：补一句运动描述，⌘↵ 生成' : '图生视频：可以直接生成，也可以补一句运动描述',
+      'success',
+    );
   }
 
   private async runNode(nodeId: ID): Promise<void> {

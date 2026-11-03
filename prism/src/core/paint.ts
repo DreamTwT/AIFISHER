@@ -1,5 +1,6 @@
 import type { Camera, Doc, Group, ID, Point, Rect, SceneNode, Thread } from './types';
 import { NODE_LABEL } from './types';
+import { VIDEO_MODE_CODE, VIDEO_MODE_LABEL, videoMode, videoPrompt } from './modes';
 import { edgeCurve, edgePath, groupBounds, nodeRect, portPoint, portVisible, type SnapGuides } from './geometry';
 
 export const KIND_COLOR: Record<SceneNode['kind'], string> = {
@@ -270,6 +271,16 @@ function drawThread(ctx: Ctx, thread: Thread, from: SceneNode, to: SceneNode, op
   }
 }
 
+function nodeCode(node: SceneNode, doc: Doc): string {
+  if (node.kind === 'render') return 'T2I';
+  if (node.kind === 'video') {
+    const refs = referenceCount(doc, node.id);
+    const prompt = node.prompt.trim() || upstreamPrompts(doc, node.id).join(' ');
+    return VIDEO_MODE_CODE[videoMode(prompt, refs)];
+  }
+  return NODE_LABEL[node.kind].toUpperCase();
+}
+
 function drawNode(ctx: Ctx, node: SceneNode, options: PaintOptions, zoom: number): void {
   const rect = nodeRect(node);
   const selected = options.selection.has(node.id);
@@ -310,7 +321,7 @@ function drawNode(ctx: Ctx, node: SceneNode, options: PaintOptions, zoom: number
   ctx.fillStyle = accent;
   ctx.font = '600 8px ui-monospace, SFMono-Regular, Menlo, "Noto Sans SC", monospace';
   ctx.textAlign = 'right';
-  ctx.fillText(NODE_LABEL[node.kind].toUpperCase(), rect.x + rect.w - 14, rect.y + 23);
+  ctx.fillText(nodeCode(node, options.doc), rect.x + rect.w - 14, rect.y + 23);
   ctx.textAlign = 'left';
 
   if (node.kind === 'render') drawRenderBody(ctx, node, options, rect);
@@ -523,20 +534,26 @@ function drawVideoBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: R
   const x = rect.x + 14;
   const width = rect.w - 28;
 
+  const refs = referenceCount(options.doc, node.id);
   const upstreamPrompt = upstreamPrompts(options.doc, node.id).join(' ');
-  const prompt = node.prompt.trim() || upstreamPrompt;
-  ctx.fillStyle = prompt ? 'rgba(11, 18, 32, 0.72)' : MUTED;
+  const typed = node.prompt.trim() || upstreamPrompt;
+  const mode = videoMode(typed, refs);
+  const prompt = videoPrompt(typed, refs);
+  ctx.fillStyle = typed ? 'rgba(11, 18, 32, 0.72)' : MUTED;
   ctx.font = '10px Inter, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
   let y = rect.y + 52;
-  for (const line of wrapText(ctx, prompt || '留空则使用上游文本；在底部输入区补充画面与运镜。', width, 13.5, 2)) {
+  const placeholder =
+    refs > 0
+      ? '图生视频：不写提示词也可以，默认运镜会自动补上。'
+      : '写一句提示词，或把图片接到左侧做图生视频。';
+  for (const line of wrapText(ctx, prompt || placeholder, width, 13.5, 2)) {
     ctx.fillText(line, x, y);
     y += 13.5;
   }
 
-  const refs = referenceCount(options.doc, node.id);
   ctx.fillStyle = refs ? '#6f8fbf' : MUTED;
   ctx.font = '8px ui-monospace, "Noto Sans SC", monospace';
-  ctx.fillText(refs ? `参考 ${refs} / 4` : '参考 0 / 4 · 可接图片或视频', x, rect.y + 86);
+  ctx.fillText(`${VIDEO_MODE_LABEL[mode]} · 参考 ${refs} / 4`, x, rect.y + 86);
 
   const previewTop = rect.y + 98;
   const previewH = rect.h - 98 - 52;
@@ -577,7 +594,7 @@ function drawVideoBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: R
     ctx.textAlign = 'center';
     ctx.fillText(`${node.progress}%`, cx, cy + 3);
     ctx.fillStyle = 'rgba(238, 242, 247, 0.72)';
-    ctx.fillText('正在生成视频', cx, cy + 30);
+    ctx.fillText(`${VIDEO_MODE_CODE[mode]} · 正在生成`, cx, cy + 30);
     ctx.textAlign = 'left';
   } else if (node.status === 'error' && node.error) {
     ctx.fillStyle = '#a33a3a';

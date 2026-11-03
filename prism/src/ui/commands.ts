@@ -13,6 +13,7 @@ export interface CommandActions {
   newProject: () => void;
   save: () => void;
   openLibrary: () => void;
+  openModes: () => void;
   openGuide: () => void;
   openSettings: () => void;
   exportProject: () => void;
@@ -42,6 +43,7 @@ export function buildCommands(actions: CommandActions): Command[] {
     { id: 'new', title: '新建项目', group: '项目', keys: '⌘⇧N', run: actions.newProject },
     { id: 'save', title: '保存到本机', group: '项目', keys: '⌘S', run: actions.save },
     { id: 'library', title: '打开素材库', group: '项目', keys: '⌘O', run: actions.openLibrary },
+    { id: 'modes', title: '新建：文生图 / 文生视频 / 图生视频 / 图文生视频', group: '项目', keys: 'N', run: actions.openModes },
     { id: 'import', title: '导入项目 JSON', group: '项目', run: actions.importFlow },
     { id: 'export-json', title: '导出项目 JSON', group: '项目', keys: '⌘⇧E', run: actions.exportProject },
     { id: 'export-png', title: '导出整幅画布 PNG', group: '项目', run: actions.exportPng },

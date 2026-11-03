@@ -1,7 +1,8 @@
-import { addAsset, getAssetBlob } from '../core/assets';
+import { addAsset, assetToImage, getAssetBlob } from '../core/assets';
 import type { Editor } from '../core/editor';
 import { hasLiveProvider, settings } from '../core/settings';
 import type { Aspect, ID } from '../core/types';
+import { VIDEO_MODE_LABEL, videoMode, videoPrompt } from '../core/modes';
 import { hashString, sleep, uid } from '../core/util';
 import { renderSample, renderSampleVideo } from './demo';
 import { renderVideoWithProvider, renderWithProvider, validateProvider } from './provider';
@@ -99,10 +100,13 @@ export async function runVideo(editor: Editor, nodeId: ID, options: RunOptions =
   if (!node || node.kind !== 'video') return;
   if (controllers.has(nodeId)) return;
 
-  const prompt = editor.effectivePrompt(nodeId).trim();
+  const typedPrompt = editor.effectivePrompt(nodeId).trim();
+  const referenceIds = editor.referenceAssets(nodeId);
+  const mode = videoMode(typedPrompt, referenceIds.length);
+  const prompt = videoPrompt(typedPrompt, referenceIds.length);
   if (!prompt) {
-    options.notify?.('视频节点还没有提示词：写一句，或把文本连进来', 'error');
-    editor.updateNode(nodeId, { status: 'error', error: '缺少提示词', progress: 0 });
+    options.notify?.('还没有输入：写一句提示词，或把图片接到左侧做图生视频', 'error');
+    editor.updateNode(nodeId, { status: 'error', error: '缺少提示词或参考图', progress: 0 });
     return;
   }
   if (!hasLiveProvider()) {
@@ -117,29 +121,28 @@ export async function runVideo(editor: Editor, nodeId: ID, options: RunOptions =
   const controller = new AbortController();
   controllers.set(nodeId, controller);
   const seed = node.seed ?? hashString(prompt + nodeId);
-  const references = editor
-    .referenceAssets(nodeId)
-    .map((id) => getAssetBlob(id))
-    .filter((blob): blob is Blob => Boolean(blob));
+  const references = referenceIds.map((id) => getAssetBlob(id)).filter((blob): blob is Blob => Boolean(blob));
   editor.updateNode(nodeId, { status: 'running', progress: 0, error: undefined });
 
   try {
     const onProgress = (value: number): void => {
       editor.updateNode(nodeId, { progress: Math.max(1, Math.min(99, value)) }, false);
     };
+    const referenceImage = !hasLiveProvider() && referenceIds.length ? await assetToImage(referenceIds[0]) : undefined;
     const blob = hasLiveProvider()
       ? await renderVideoWithProvider(prompt, node.aspect, node.seconds, references, controller.signal, onProgress)
-      : await renderSampleVideo(prompt, node.aspect, node.seconds, seed, onProgress, controller.signal);
+      : await renderSampleVideo(prompt, node.aspect, node.seconds, seed, onProgress, controller.signal, referenceImage);
     if (controller.signal.aborted) throw new DOMException('已取消', 'AbortError');
     const meta = await addAsset(blob, {
-      name: `${node.title && node.title !== '视频生成' ? node.title : '视频'} · ${node.seconds}s`,
+      name: `${node.title && node.title !== '视频生成' ? node.title : VIDEO_MODE_LABEL[mode]} · ${node.seconds}s`,
       source: 'render',
       prompt,
       seed,
       model: hasLiveProvider() ? settings().videoModel?.trim() || settings().model : 'prism-sample',
+      mode: VIDEO_MODE_LABEL[mode],
     });
     editor.updateNode(nodeId, { status: 'done', progress: 100, assetIds: [meta.id], error: undefined });
-    options.notify?.(`已生成 ${node.seconds} 秒视频`, 'success');
+    options.notify?.(`${VIDEO_MODE_LABEL[mode]}完成 · ${node.seconds} 秒`, 'success');
   } catch (error) {
     if (controller.signal.aborted) {
       editor.updateNode(nodeId, { status: 'idle', progress: 0 });

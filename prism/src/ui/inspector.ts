@@ -1,6 +1,7 @@
 import { allAssets, getAssetMeta, getAssetPoster, getAssetUrl } from '../core/assets';
 import type { Editor } from '../core/editor';
 import type { ClipNode, Group, ID, ImageNode, PromptNode, RenderNode, SceneNode, VideoNode, WeaveNode } from '../core/types';
+import { DEFAULT_MOTION_PROMPT, VIDEO_MODE_CODE, VIDEO_MODE_LABEL, videoMode, videoPrompt } from '../core/modes';
 import { ASPECTS as ASPECT_LIST, NODE_LABEL } from '../core/types';
 import { formatBytes } from '../core/util';
 import { icon } from './icons';
@@ -159,6 +160,7 @@ function renderRender(host: HTMLElement, node: RenderNode, deps: InspectorDeps):
   const { editor } = deps;
   const section = sectionBase('render', node);
   section.appendChild(titleField(node, deps));
+  section.appendChild(modeReadout('T2I', '文生图', '只接收文本：提示词进，图片出。图片要动起来，请用视频生成节点。'));
 
   const promptNote = document.createElement('p');
   promptNote.className = 'panel-note';
@@ -268,7 +270,7 @@ function referenceStrip(node: VideoNode, deps: InspectorDeps): HTMLElement {
     .filter((item): item is SceneNode => Boolean(item));
   const media = refs.filter((item) => item.kind === 'image' || item.kind === 'clip' || item.kind === 'video');
   if (!media.length) {
-    strip.innerHTML = '<div class="reference-empty">把图片或视频节点连到左侧接口，就会成为参考。</div>';
+    strip.innerHTML = '<div class="reference-empty">接一张图片做图生视频；再接上提示词，就是图文生视频。</div>';
     return strip;
   }
   media.forEach((item) => {
@@ -304,16 +306,31 @@ function renderVideo(host: HTMLElement, node: VideoNode, deps: InspectorDeps): v
   const section = sectionBase('video', node);
   section.appendChild(titleField(node, deps));
 
+  const typedPrompt = editor.effectivePrompt(node.id);
+  const refCount = editor.referenceAssets(node.id).length;
+  const mode = videoMode(typedPrompt, refCount);
+  const modeHint =
+    mode === 't2v'
+      ? '只有提示词，没有参考；把图片接到左侧，会自动切换成图生视频。'
+      : mode === 'i2v'
+        ? '参考图作为首帧；提示词可以不写，会补上默认运镜。'
+        : '提示词描述运动，参考图提供首帧，两者一起送入。';
+  section.appendChild(modeReadout(VIDEO_MODE_CODE[mode], VIDEO_MODE_LABEL[mode], modeHint));
+
   const note = document.createElement('p');
   note.className = 'panel-note';
   note.dataset.nodeNote = node.id;
-  note.textContent = '提示词与运镜在画布底部输入区编辑；上游文本会自动拼接。参考图/视频通过左侧接口连入。';
+  note.textContent =
+    mode === 'i2v'
+      ? '图生视频：可以直接点生成；想控制运动时，在画布底部输入区补一句。'
+      : '提示词与运镜在画布底部输入区编辑；上游文本会自动拼接，参考通过左侧接口连入。';
   section.appendChild(note);
 
   const effective = document.createElement('div');
   effective.className = 'effective-prompt';
-  const prompt = editor.effectivePrompt(node.id);
-  effective.innerHTML = `<div class="eyebrow">EFFECTIVE PROMPT</div><p>${escape(prompt || '还没有可用的提示词')}</p>`;
+  const prompt = videoPrompt(typedPrompt, refCount);
+  const autoNote = !typedPrompt.trim() && refCount ? `<p class="mode-auto">自动补全：${escape(DEFAULT_MOTION_PROMPT)}</p>` : '';
+  effective.innerHTML = `<div class="eyebrow">EFFECTIVE PROMPT</div><p>${escape(prompt || '还没有提示词，也没有参考')}</p>${autoNote}`;
   section.appendChild(effective);
 
   const aspectGrid = document.createElement('div');
@@ -750,6 +767,13 @@ function renderCommon(host: HTMLElement, node: SceneNode, deps: InspectorDeps): 
   actions.append(dup, del);
   section.appendChild(actions);
   host.appendChild(section);
+}
+
+function modeReadout(code: string, name: string, description: string): HTMLElement {
+  const box = document.createElement('div');
+  box.className = 'mode-readout';
+  box.innerHTML = `<span class="mode-code">${code}</span><div><strong>${name}</strong><p>${description}</p></div>`;
+  return box;
 }
 
 function sectionBase(kind: SceneNode['kind'], node: SceneNode): HTMLElement {

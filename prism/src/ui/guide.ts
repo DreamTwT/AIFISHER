@@ -25,7 +25,7 @@ export function openGuide(): void {
             <path d="M78 56 H103" stroke="#6fe3ff" stroke-width="1.5" />
             <path d="M149 56 H174" stroke="#ffb184" stroke-width="1.5" />
           </svg>
-          <p>PRISM 是一张本机优先的 AI 图像与视频工作流画布：文本写提示词，生成出图或出视频，图片与视频做素材，拼图做排版。所有内容都保存在你自己的浏览器里。</p>
+          <p>PRISM 是一张本机优先的无限画布：T2I 文生图、T2V 文生视频、I2V 图生视频、IT2V 图文生视频都在这里完成。文本、图片与视频是节点，可以继续接、继续改。所有内容都保存在你自己的浏览器里。</p>
         </div>
 
         <section>
@@ -44,7 +44,7 @@ export function openGuide(): void {
         <section>
           <span class="guide-no">02</span>
           <h3>在画布底部写提示词</h3>
-          <p>点击文本、生成或视频生成节点，画布正下方会出现对应的输入区。直接输入即可实时写回节点，<kbd>⌘↵</kbd> 运行，<kbd>Esc</kbd> 收起；双击节点会直接聚焦输入区。</p>
+          <p>点击文本、生成或视频生成节点，画布正下方会出现对应的输入区。图生视频可以不写提示词：只接一张图片，直接生成。直接输入即可实时写回节点，<kbd>⌘↵</kbd> 运行，<kbd>Esc</kbd> 收起；双击节点会直接聚焦输入区。</p>
           <p>生成节点的提示词 = 所有上游文本（按距离排序）+ 底部输入区里的本地补充。留空则只读取上游，适合把“画面”和“风格”拆成两个文本节点分别维护。</p>
         </section>
 
@@ -73,10 +73,11 @@ export function openGuide(): void {
 
         <section>
           <span class="guide-no">06</span>
-          <h3>视频生成与多参考</h3>
-          <p>视频生成节点的左侧接口同时接受文本、图片和视频：文本进入提示词，图片与视频成为参考，最多取前 4 个；超过时检查器会提示只取前 4 个。</p>
-          <p>参考可以来自图片节点、拖进画布的 MP4/WebM（会自动成为视频素材节点），也可以直接连上游视频节点的结果，做视频生视频。画幅限 16:9 / 9:16 / 1:1，时长 2–12 秒。</p>
-          <p>离线示例会用浏览器的 <code>MediaRecorder</code> 录一段程序化动画；真实接口走 Sora 风格的 <code>/videos</code> 异步任务，参考以 <code>input_reference</code> 上传。</p>
+          <h3>四种模式：T2I / T2V / I2V / IT2V</h3>
+          <p>按 <kbd>N</kbd> 打开模式入口：文生图（文本 → 图片）、文生视频（文本 → 视频）、图生视频（图片 → 视频）、图文生视频（图片 + 文本 → 视频）。选完都落在同一张无限画布上，不是四个割裂的页面。</p>
+          <p>视频节点会根据输入自动切换模式：只接提示词是 T2V；只接图片是 I2V，提示词可以留空；图片和提示词都接是 IT2V。节点标题右侧和检查器都会显示当前模式。</p>
+          <p>图生视频不写提示词时，会显式补上默认运镜「保持主体、构图与光线一致，镜头自然运动」，检查器里能看到实际送入的提示词。左侧接口最多取前 4 个参考；超过时会提示只取前 4 个。</p>
+          <p>画幅限 16:9 / 9:16 / 1:1，时长 2–12 秒。离线示例会用浏览器的 <code>MediaRecorder</code> 录一段动画：T2V 是程序化画面，I2V/IT2V 会把参考图做成缓慢推近与扫光。真实接口走 Sora 风格的 <code>/videos</code> 异步任务，参考以 <code>input_reference</code> 上传。</p>
         </section>
 
         <section>
@@ -98,6 +99,7 @@ export function openGuide(): void {
           <span class="guide-no">09</span>
           <h3>键盘</h3>
           <div class="keys-table">
+            <div><kbd>N</kbd><span>四种创作模式</span></div>
             <div><kbd>⌘K</kbd><span>命令面板</span></div>
             <div><kbd>⌘S</kbd><span>保存</span></div>
             <div><kbd>T / G / V / W / I</kbd><span>新增文本 / 生成 / 视频 / 拼图 / 图片节点</span></div>
@@ -120,7 +122,7 @@ export function openGuide(): void {
           <h3>一句话原则</h3>
           <p class="guide-quote">先把提示词写清楚，再让生成节点去试；一次只改一个变量。</p>
         </section>
-        <footer class="guide-foot">PRISM · 本机优先的 AI 图像与视频工作台</footer>
+        <footer class="guide-foot">PRISM · 本机优先的 AI 图像与视频无限画布</footer>
       </div>
     </div>`;
   document.body.appendChild(backdrop);
