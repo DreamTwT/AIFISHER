@@ -327,18 +327,21 @@ export async function renderSampleVideo(
   const total = Math.max(2, Math.min(12, seconds));
   const started = performance.now();
   await new Promise<void>((resolve) => {
-    const frame = (): void => {
+    // 用定时器而不是 rAF：切到别的标签页时 rAF 会暂停，录制会一直卡住。
+    const timer = window.setInterval(() => {
       if (signal?.aborted) {
+        window.clearInterval(timer);
         resolve();
         return;
       }
       const t = Math.min(1, (performance.now() - started) / (total * 1000));
       drawDemoFrame(ctx, width, height, prompt, seed, t);
       onProgress?.(Math.round(t * 96));
-      if (t < 1) requestAnimationFrame(frame);
-      else resolve();
-    };
-    requestAnimationFrame(frame);
+      if (t >= 1) {
+        window.clearInterval(timer);
+        resolve();
+      }
+    }, 1000 / 30);
   });
   recorder.stop();
   stream.getTracks().forEach((track) => track.stop());

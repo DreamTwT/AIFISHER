@@ -27,13 +27,13 @@ export function openSettings(options: SettingsOptions = {}): void {
           </div>
         </section>
         <section class="settings-section">
-          <h3>OpenAI 兼容图像接口</h3>
+          <h3>OpenAI 兼容接口</h3>
           <label class="field"><span class="field-head"><span>Base URL</span><span class="field-hint">不要带 /images/generations</span></span><input class="text-input" data-field="endpoint" value="${escapeAttr(config.endpoint)}" placeholder="https://api.openai.com/v1" /></label>
           <label class="field"><span class="field-head"><span>API Key</span><span class="field-hint">只存本机</span></span><span class="key-wrap"><input class="text-input" type="password" data-field="apiKey" value="${escapeAttr(config.apiKey)}" placeholder="sk-…" autocomplete="off" /><button type="button" class="btn tiny" data-act="reveal">显示</button></span></label>
           <label class="field"><span class="field-head"><span>图像模型</span><span class="field-hint">需支持图像生成</span></span><input class="text-input" data-field="model" value="${escapeAttr(config.model)}" placeholder="gpt-image-1" /></label>
           <label class="field"><span class="field-head"><span>视频模型</span><span class="field-hint">留空则沿用图像模型</span></span><input class="text-input" data-field="videoModel" value="${escapeAttr(config.videoModel ?? '')}" placeholder="sora-2" /></label>
           <label class="field"><span class="field-head"><span>并行生成</span><span class="field-hint">同时运行的任务数</span></span><input type="range" min="1" max="3" step="1" data-field="concurrency" value="${config.concurrency}" /><output data-out="concurrency">${config.concurrency}</output></label>
-          <p class="settings-note">视频走 Sora 风格接口：<code>/videos</code> 建任务，轮询 <code>/videos/{id}</code>，完成后从 <code>/videos/{id}/content</code> 下载。参考图以 <code>input_reference</code> 上传，最多 4 个。不同服务对画幅、张数、种子的支持不一致，遇到 4xx 时先只留 1 张、改成 1:1 再试。</p>
+          <p class="settings-note">视频走 Sora 风格接口：<code>/videos</code> 建任务，轮询 <code>/videos/{id}</code>，完成后从 <code>/videos/{id}/content</code> 下载。参考（图片或视频）以 <code>input_reference</code> 上传，最多 4 个。不同服务对画幅、张数、种子的支持不一致，遇到 4xx 时先只留 1 张、改成 1:1 再试。</p>
         </section>
         <section class="settings-section connection">
           <div class="connection-state"><span class="dot"></span><span data-out="state">${config.demo ? '离线示例' : config.apiKey ? '已填写密钥，可以测试' : '还没有密钥'}</span></div>

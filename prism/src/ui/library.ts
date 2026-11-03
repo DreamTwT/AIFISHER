@@ -280,7 +280,7 @@ export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = 
         <div class="detail-top"><div class="eyebrow">ASSET / ${isVideo ? '视频' : '图片'}</div><button class="icon-btn" data-act="close" aria-label="关闭">${icon('close', 16)}</button></div>
         <h2>${escape(asset.name)}</h2>
         <dl>
-          <div><dt>尺寸</dt><dd>${image ? `${image.naturalWidth} × ${image.naturalHeight}` : `${asset.width} × ${asset.height}`}</dd></div>
+          <div><dt>尺寸</dt><dd>${isVideo || !image ? `${asset.width} × ${asset.height}` : `${image.naturalWidth} × ${image.naturalHeight}`}</dd></div>
           ${asset.duration ? `<div><dt>时长</dt><dd>${asset.duration.toFixed(1)} 秒</dd></div>` : ''}
           <div><dt>来源</dt><dd>${asset.source === 'upload' ? '上传' : asset.model || '本机生成'}</dd></div>
           ${asset.seed ? `<div><dt>种子</dt><dd>${asset.seed}</dd></div>` : ''}

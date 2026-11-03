@@ -1,4 +1,4 @@
-import { allAssets, getAssetMeta, getAssetUrl } from '../core/assets';
+import { allAssets, getAssetMeta, getAssetPoster, getAssetUrl } from '../core/assets';
 import type { Editor } from '../core/editor';
 import type { ClipNode, Group, ID, ImageNode, PromptNode, RenderNode, SceneNode, VideoNode, WeaveNode } from '../core/types';
 import { ASPECTS as ASPECT_LIST, NODE_LABEL } from '../core/types';
@@ -277,7 +277,8 @@ function referenceStrip(node: VideoNode, deps: InspectorDeps): HTMLElement {
     chip.className = 'reference-chip';
     const assetId =
       item.kind === 'image' || item.kind === 'clip' ? item.assetId : item.kind === 'video' ? item.assetIds[0] : undefined;
-    const url = getAssetUrl(assetId);
+    const url =
+      item.kind === 'image' ? getAssetUrl(assetId) : getAssetPoster(assetId) ?? getAssetUrl(assetId);
     chip.innerHTML = `${url ? `<img alt="" src="${url}" />` : `<span>${NODE_LABEL[item.kind]}</span>`}<i>${NODE_LABEL[item.kind]}</i>`;
     chip.title = item.title || NODE_LABEL[item.kind];
     chip.addEventListener('click', () => {
