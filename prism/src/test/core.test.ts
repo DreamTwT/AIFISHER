@@ -85,6 +85,23 @@ describe('prism graph core', () => {
     expect(restored?.kind === 'render' ? restored.assetIds : []).toEqual(['asset-b']);
   });
 
+  it('clears several deleted assets in one history step', () => {
+    const editor = new Editor(starterProject());
+    const render = editor.doc.nodes.find((node) => node.kind === 'render');
+    const image = createNode('image', 0, 0);
+    editor.doc.nodes.push(image);
+    if (render?.kind === 'render') render.assetIds = ['a', 'b'];
+    if (image.kind === 'image') image.assetId = 'b';
+    expect(editor.removeAssetReferences(['a', 'b'])).toBe(true);
+    if (render?.kind === 'render') expect(render.assetIds).toEqual([]);
+    if (image.kind === 'image') expect(image.assetId).toBeUndefined();
+    expect(editor.undo()).toBe(true);
+    const restoredRender = editor.node(render!.id);
+    const restoredImage = editor.node(image.id);
+    expect(restoredRender?.kind === 'render' ? restoredRender.assetIds : []).toEqual(['a', 'b']);
+    expect(restoredImage?.kind === 'image' ? restoredImage.assetId : undefined).toBe('b');
+  });
+
   it('clears every canvas reference when an asset is deleted', () => {
     const editor = new Editor(starterProject());
     const render = editor.doc.nodes.find((node) => node.kind === 'render');

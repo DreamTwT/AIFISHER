@@ -335,19 +335,21 @@ export class Editor {
     this.commit(before);
   }
 
-  /** 删除素材后清空节点里对它的引用；素材文件本身由 assets 层移除。 */
-  removeAssetReferences(assetId: ID): boolean {
+  /** 删除素材后清空节点里对它的引用；素材文件本身由 assets 层移除。一次可以处理多张，只记一步撤销。 */
+  removeAssetReferences(assetId: ID | ID[]): boolean {
+    const ids = new Set<ID>(Array.isArray(assetId) ? assetId : [assetId]);
+    if (!ids.size) return false;
     const before = deepClone(this.doc);
     let changed = false;
     for (const node of this.doc.nodes) {
-      if (node.kind === 'render' && node.assetIds.includes(assetId)) {
-        node.assetIds = node.assetIds.filter((id) => id !== assetId);
+      if (node.kind === 'render' && node.assetIds.some((id) => ids.has(id))) {
+        node.assetIds = node.assetIds.filter((id) => !ids.has(id));
         if (!node.assetIds.length) {
           node.status = 'idle';
           node.progress = 0;
         }
         changed = true;
-      } else if (node.kind === 'image' && node.assetId === assetId) {
+      } else if (node.kind === 'image' && node.assetId && ids.has(node.assetId)) {
         node.assetId = undefined;
         changed = true;
       }

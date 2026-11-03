@@ -2,23 +2,24 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../core/assets', () => {
-  const asset = {
-    id: 'asset-1',
-    name: '测试图',
+  const make = (index: number) => ({
+    id: `asset-${index}`,
+    name: `测试图 0${index}`,
     mime: 'image/png',
     width: 1024,
     height: 1024,
     size: 2048,
-    createdAt: 1_700_000_000_000,
+    createdAt: 1_700_000_000_000 + index,
     source: 'upload',
-  };
+  });
+  const assets = [make(1), make(2), make(3)];
   return {
-    allAssets: () => [asset],
+    allAssets: () => assets,
     subscribeAssets: () => () => {},
     getAssetUrl: () => undefined,
     getAssetImage: () => undefined,
-    getAssetMeta: (id: string) => (id === 'asset-1' ? asset : undefined),
-    addAsset: async () => asset,
+    getAssetMeta: (id: string) => assets.find((asset) => asset.id === id),
+    addAsset: async () => assets[0],
   };
 });
 import { Editor } from '../core/editor';
@@ -166,6 +167,35 @@ describe('library delete entry', () => {
     expect(deleted).toEqual(['asset-1']);
     expect(used).toBe(0);
     document.querySelector('.library-backdrop')?.remove();
+  });
+
+  it('batch deletes the cards picked in select mode', async () => {
+    const deleted: ID[][] = [];
+    let used = 0;
+    openLibrary({ onUse: () => (used += 1), onDeleteMany: (ids) => (deleted.push(ids), true) });
+    document.querySelector<HTMLButtonElement>('[data-act="select"]')!.click();
+    const cards = [...document.querySelectorAll<HTMLElement>('.asset-card')];
+    expect(cards).toHaveLength(3);
+    cards[0].click();
+    cards[1].click();
+    expect(cards[0].classList.contains('picked')).toBe(true);
+    expect(document.querySelector('.bulk-count')?.textContent).toContain('2');
+    document.querySelector<HTMLButtonElement>('[data-act="delete"]')!.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(deleted[0]).toEqual(['asset-1', 'asset-2']);
+    expect(used).toBe(0);
+    document.querySelector('.library-backdrop')?.remove();
+  });
+
+  it('places every picked card on the canvas in one action', () => {
+    const placed: ID[][] = [];
+    openLibrary({ onUse: () => {}, onUseMany: (ids) => placed.push(ids) });
+    document.querySelector<HTMLButtonElement>('[data-act="select"]')!.click();
+    document.querySelector<HTMLButtonElement>('[data-act="all"]')!.click();
+    expect(document.querySelector('.bulk-count')?.textContent).toContain('3');
+    document.querySelector<HTMLButtonElement>('[data-act="place"]')!.click();
+    expect(placed[0]).toEqual(['asset-1', 'asset-2', 'asset-3']);
+    expect(document.querySelector('.library-backdrop')).toBeNull();
   });
 
   it('offers a delete action in the asset detail sheet', () => {

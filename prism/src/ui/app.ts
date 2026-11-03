@@ -882,7 +882,9 @@ class App {
 
   private openLibrary(): void {
     openLibrary({
-      onDelete: (assetId) => this.deleteAsset(assetId),
+      onDelete: (assetId) => this.deleteAssets([assetId]),
+      onDeleteMany: (assetIds) => this.deleteAssets(assetIds),
+      onUseMany: (assetIds) => this.placeAssets(assetIds),
       onUse: (assetId) => {
         const camera = this.editor.project.camera;
         const rect = this.stage.getBoundingClientRect();
@@ -911,7 +913,8 @@ class App {
 
   private pickFromLibrary(nodeId: ID): void {
     openLibrary({
-      onDelete: (assetId) => this.deleteAsset(assetId),
+      onDelete: (assetId) => this.deleteAssets([assetId]),
+      onDeleteMany: (assetIds) => this.deleteAssets(assetIds),
       onUse: (assetId) => {
         const meta = getAssetMeta(assetId);
         this.editor.updateNode(nodeId, { assetId, caption: meta?.name ?? '' }, true);
@@ -926,21 +929,71 @@ class App {
     }
   }
 
-  private async deleteAsset(assetId: ID): Promise<boolean> {
-    const meta = getAssetMeta(assetId);
-    if (!meta) return false;
-    if (!window.confirm(`删除「${meta.name}」？画布中引用它的节点会被一并清空。`)) return false;
-    try {
-      await removeAsset(assetId);
-    } catch (error) {
-      console.warn('[prism] 素材删除失败', error);
+  private placeAssets(assetIds: ID[]): void {
+    const metas = assetIds.map((id) => getAssetMeta(id)).filter((meta) => meta !== undefined);
+    if (!metas.length) return;
+    const camera = this.editor.project.camera;
+    const rect = this.stage.getBoundingClientRect();
+    const world = {
+      x: (rect.width / 2 - camera.x) / camera.z,
+      y: (rect.height / 2 - camera.y) / camera.z,
+    };
+    const size = NODE_SIZE.image;
+    const cols = Math.min(3, Math.ceil(Math.sqrt(metas.length)));
+    const rows = Math.ceil(metas.length / cols);
+    const stepX = size.w + 48;
+    const stepY = size.h + 48;
+    const originX = world.x - (cols * stepX - 48) / 2;
+    const originY = world.y - (rows * stepY - 48) / 2;
+    this.editor.begin();
+    metas.forEach((meta, index) => {
+      const col = index % cols;
+      const row = Math.floor(index / cols);
+      this.editor.addNode(
+        'image',
+        Math.round(originX + col * stepX),
+        Math.round(originY + row * stepY),
+        { assetId: meta.id, caption: meta.name, title: '图片' },
+        false,
+      );
+    });
+    this.editor.end(true);
+    this.syncUI();
+    showToast(metas.length === 1 ? '图片已放入画布' : `已放入 ${metas.length} 张图片`, 'success');
+  }
+
+  private async deleteAssets(assetIds: ID[]): Promise<boolean> {
+    const metas = assetIds.map((id) => getAssetMeta(id)).filter((meta) => meta !== undefined);
+    if (!metas.length) return false;
+    const message =
+      metas.length === 1
+        ? `删除「${metas[0].name}」？画布中引用它的节点会被一并清空。`
+        : `删除选中的 ${metas.length} 张图片？画布中引用它们的节点会被一并清空。`;
+    if (!window.confirm(message)) return false;
+    const removed: ID[] = [];
+    for (const meta of metas) {
+      try {
+        await removeAsset(meta.id);
+        removed.push(meta.id);
+      } catch (error) {
+        console.warn('[prism] 素材删除失败', error);
+      }
+    }
+    if (!removed.length) {
       showToast('删除失败，请重试', 'error');
       return false;
     }
-    const cleared = this.editor.removeAssetReferences(assetId);
+    const cleared = this.editor.removeAssetReferences(removed);
     this.syncUI();
-    showToast(cleared ? '素材已删除，画布中的引用已清空' : '素材已删除', 'success');
-    return true;
+    const failed = metas.length - removed.length;
+    if (failed) {
+      showToast(`已删除 ${removed.length} 张，${failed} 张失败`, 'error');
+    } else if (cleared) {
+      showToast(removed.length === 1 ? '素材已删除，画布中的引用已清空' : `已删除 ${removed.length} 张，画布中的引用已清空`, 'success');
+    } else {
+      showToast(removed.length === 1 ? '素材已删除' : `已删除 ${removed.length} 张`, 'success');
+    }
+    return failed === 0;
   }
 
   private openAsset(assetId: ID): void {
@@ -950,7 +1003,7 @@ class App {
       return;
     }
     openAssetDetail(meta, {
-      onDelete: (id) => this.deleteAsset(id),
+      onDelete: (id) => this.deleteAssets([id]),
       onUse: (id) => {
         const camera = this.editor.project.camera;
         const rect = this.stage.getBoundingClientRect();
