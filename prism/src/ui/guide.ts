@@ -33,10 +33,10 @@ export function openGuide(): void {
           <h3>六种节点</h3>
           <div class="guide-grid">
             <div><b>文本 · TEXT</b><span>写提示词、方向、风格与光线。本身不出图，连线后成为下游节点的输入。</span></div>
-            <div><b>生成 · GENERATE</b><span>调用真实模型或离线示例。可设置画幅、张数、种子，也可以补充本地提示词。</span></div>
+            <div><b>文生图 · T2I</b><span>调用真实模型或离线示例。可设置画幅、张数、种子，也可以补充本地提示词。</span></div>
             <div><b>图片 · IMAGE</b><span>一张现有图片。可上传、从素材库放入，双击查看大图与来源信息。</span></div>
             <div><b>拼图 · COLLAGE</b><span>把直接连入的图片按列排成一张版面，可单独导出 PNG。</span></div>
-            <div><b>视频生成 · VIDEO</b><span>接文本与参考（图片/视频），生成 2–12 秒视频；可设画幅、时长与种子。</span></div>
+            <div><b>视频生成 · T2V / I2V / IT2V</b><span>接文本与参考（图片/视频），生成 2–12 秒视频；可设画幅、时长与种子。</span></div>
             <div><b>视频 · CLIP</b><span>一段现有视频。拖入或从素材库放入，作为视频节点的参考或单独预览。</span></div>
           </div>
         </section>

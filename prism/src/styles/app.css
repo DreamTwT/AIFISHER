@@ -3230,6 +3230,8 @@ input[type='range'] {
   border-radius: 6px;
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
   padding: 24px 26px 20px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
 }
 
 .mode-head {

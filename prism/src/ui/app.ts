@@ -200,8 +200,8 @@ class App {
         <aside class="rail">
           <div class="rail-group">
             <button class="tool kind-prompt" data-add="prompt" data-tip="文本 · T">${icon('prompt', 17)}<span class="tool-badge">文</span></button>
-            <button class="tool kind-render" data-add="render" data-tip="生成 · G">${icon('render', 17)}<span class="tool-badge">生</span></button>
-            <button class="tool kind-video" data-add="video" data-tip="视频生成 · V">${icon('video', 17)}<span class="tool-badge">视</span></button>
+            <button class="tool kind-render" data-add="render" data-tip="文生图 T2I · G">${icon('render', 17)}<span class="tool-badge">生</span></button>
+            <button class="tool kind-video" data-add="video" data-tip="文生视频 T2V · V">${icon('video', 17)}<span class="tool-badge">视</span></button>
             <button class="tool kind-weave" data-add="weave" data-tip="拼图 · W">${icon('weave', 17)}<span class="tool-badge">拼</span></button>
             <button class="tool kind-image" data-add="image" data-tip="图片 · I">${icon('image', 17)}<span class="tool-badge">图</span></button>
           </div>
