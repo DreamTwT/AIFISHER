@@ -7,6 +7,8 @@ export const KIND_COLOR: Record<SceneNode['kind'], string> = {
   render: '#6fe3ff',
   image: '#a7b9ff',
   weave: '#ff9fb2',
+  video: '#d8b4fe',
+  clip: '#8ef0c8',
 };
 
 const INK = '#0b1220';
@@ -312,8 +314,10 @@ function drawNode(ctx: Ctx, node: SceneNode, options: PaintOptions, zoom: number
   ctx.textAlign = 'left';
 
   if (node.kind === 'render') drawRenderBody(ctx, node, options, rect);
+  else if (node.kind === 'video') drawVideoBody(ctx, node, options, rect);
   else if (node.kind === 'prompt') drawPromptBody(ctx, node, rect);
   else if (node.kind === 'image') drawImageBody(ctx, node, options, rect);
+  else if (node.kind === 'clip') drawClipBody(ctx, node, options, rect);
   else drawWeaveBody(ctx, node, options, rect);
 
   ctx.restore();
@@ -488,6 +492,126 @@ function drawRenderBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: 
     ctx.fillText(node.status === 'done' ? 'DONE' : 'READY', rect.x + rect.w - 14, rect.y + rect.h - 16);
     ctx.textAlign = 'left';
   }
+}
+
+function referenceCount(doc: Doc, nodeId: ID): number {
+  let count = 0;
+  for (const thread of doc.threads) {
+    if (thread.to !== nodeId) continue;
+    const source = doc.nodes.find((node) => node.id === thread.from);
+    if (source && (source.kind === 'image' || source.kind === 'clip' || source.kind === 'video')) count += 1;
+  }
+  return count;
+}
+
+function drawPlayBadge(ctx: Ctx, x: number, y: number, size: number): void {
+  ctx.fillStyle = 'rgba(8, 13, 22, 0.72)';
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#eef2f7';
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.28, y - size * 0.42);
+  ctx.lineTo(x + size * 0.46, y);
+  ctx.lineTo(x - size * 0.28, y + size * 0.42);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawVideoBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: Rect): void {
+  if (node.kind !== 'video') return;
+  const x = rect.x + 14;
+  const width = rect.w - 28;
+
+  const upstreamPrompt = upstreamPrompts(options.doc, node.id).join(' ');
+  const prompt = node.prompt.trim() || upstreamPrompt;
+  ctx.fillStyle = prompt ? 'rgba(11, 18, 32, 0.72)' : MUTED;
+  ctx.font = '10px Inter, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif';
+  let y = rect.y + 52;
+  for (const line of wrapText(ctx, prompt || '留空则使用上游文本；在底部输入区补充画面与运镜。', width, 13.5, 2)) {
+    ctx.fillText(line, x, y);
+    y += 13.5;
+  }
+
+  const refs = referenceCount(options.doc, node.id);
+  ctx.fillStyle = refs ? '#6f8fbf' : MUTED;
+  ctx.font = '8px ui-monospace, "Noto Sans SC", monospace';
+  ctx.fillText(refs ? `参考 ${refs} / 4` : '参考 0 / 4 · 可接图片或视频', x, rect.y + 86);
+
+  const previewTop = rect.y + 98;
+  const previewH = rect.h - 98 - 52;
+  const previewW = width;
+  ctx.fillStyle = '#0f1a2a';
+  ctx.fillRect(x, previewTop, previewW, previewH);
+  const image = options.getImage(node.assetIds[0]);
+  if (image) {
+    drawCover(ctx, image, x, previewTop, previewW, previewH);
+    drawPlayBadge(ctx, x + previewW / 2, previewTop + previewH / 2, 17);
+  } else {
+    ctx.strokeStyle = 'rgba(238, 242, 247, 0.16)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, previewTop + 0.5, previewW - 1, previewH - 1);
+    ctx.fillStyle = 'rgba(238, 242, 247, 0.34)';
+    ctx.font = '8px ui-monospace, "Noto Sans SC", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('VIDEO', x + previewW / 2, previewTop + previewH / 2);
+    ctx.textAlign = 'left';
+  }
+
+  ctx.fillStyle = 'rgba(11, 18, 32, 0.56)';
+  ctx.font = '8.5px ui-monospace, "Noto Sans SC", monospace';
+  ctx.fillText(`${node.aspect} · ${node.seconds}s`, x, rect.y + rect.h - 22);
+
+  if (node.status === 'running') {
+    ctx.fillStyle = 'rgba(8, 14, 11, 0.7)';
+    ctx.fillRect(rect.x, rect.y + 40, rect.w, rect.h - 40);
+    ctx.strokeStyle = '#d8b4fe';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    const cx = rect.x + rect.w / 2;
+    const cy = rect.y + rect.h / 2 - 10;
+    ctx.arc(cx, cy, 13, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#d8b4fe';
+    ctx.font = '600 9px ui-monospace, "Noto Sans SC", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${node.progress}%`, cx, cy + 3);
+    ctx.fillStyle = 'rgba(238, 242, 247, 0.72)';
+    ctx.fillText('正在生成视频', cx, cy + 30);
+    ctx.textAlign = 'left';
+  } else if (node.status === 'error' && node.error) {
+    ctx.fillStyle = '#a33a3a';
+    ctx.font = '9px Inter, "Noto Sans SC", sans-serif';
+    ctx.fillText(truncate(ctx, node.error, width), x, rect.y + rect.h - 6);
+  }
+}
+
+function drawClipBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: Rect): void {
+  if (node.kind !== 'clip') return;
+  const x = rect.x + 10;
+  const y = rect.y + 50;
+  const w = rect.w - 20;
+  const h = rect.h - 50 - 36;
+  ctx.fillStyle = '#0f1a2a';
+  ctx.fillRect(x, y, w, h);
+  const image = options.getImage(node.assetId);
+  if (image) {
+    drawCover(ctx, image, x, y, w, h);
+    drawPlayBadge(ctx, x + w / 2, y + h / 2, 16);
+  } else {
+    ctx.strokeStyle = 'rgba(238, 242, 247, 0.22)';
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(238, 242, 247, 0.47)';
+    ctx.font = '9px ui-monospace, "Noto Sans SC", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('拖入视频', x + w / 2, y + h / 2);
+    ctx.textAlign = 'left';
+  }
+  ctx.fillStyle = 'rgba(11, 18, 32, 0.56)';
+  ctx.font = '9px Inter, "PingFang SC", "Noto Sans SC", sans-serif';
+  ctx.fillText(truncate(ctx, node.caption || '未命名视频', rect.w - 24), rect.x + 12, rect.y + rect.h - 16);
 }
 
 function drawImageBody(ctx: Ctx, node: SceneNode, options: PaintOptions, rect: Rect): void {

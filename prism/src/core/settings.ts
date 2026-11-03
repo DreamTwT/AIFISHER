@@ -7,6 +7,7 @@ const DEFAULTS: Settings = {
   endpoint: 'https://api.openai.com/v1',
   apiKey: '',
   model: 'gpt-image-1',
+  videoModel: '',
   demo: true,
   concurrency: 2,
 };
@@ -54,6 +55,17 @@ export function updateSettings(patch: Partial<Settings>): void {
 
 export function hasLiveProvider(): boolean {
   return Boolean(current.endpoint.trim() && current.apiKey.trim() && !current.demo);
+}
+
+export function videoSizeFor(aspect: Aspect): string {
+  switch (aspect) {
+    case '9:16':
+      return '720x1280';
+    case '1:1':
+      return '1024x1024';
+    default:
+      return '1280x720';
+  }
 }
 
 export function imageSizeFor(aspect: Aspect): string {

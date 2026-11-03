@@ -2,6 +2,7 @@ const PATHS: Record<string, string> = {
   needle: '<path d="M20 4 9 15"/><path d="m4 20 3.2-.8L9 15l-2-2-4.2 1.8z"/><path d="M14.5 9.5 11 6l7-3z"/>',
   prompt: '<path d="M4 5h16"/><path d="M4 12h10"/><path d="M4 19h13"/>',
   render: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m8 13 3-3 3 3 2-2 3 3"/><circle cx="9" cy="8.4" r="1.2"/>',
+  video: '<rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="m3 16 5-5 4 4 3-3 6 6"/>',
   weave: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>',
   play: '<path d="M7 4.5v15l12-7.5z"/>',

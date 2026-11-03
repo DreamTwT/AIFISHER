@@ -76,6 +76,7 @@ function mountViewport(project = starterProject()): { viewport: Viewport; editor
     onToast: () => {},
     onOpenImage: () => {},
     onPickImage: () => {},
+    onPickVideo: () => {},
     onEditText: () => {},
     onInteractionEnd: () => {},
   };
@@ -134,6 +135,33 @@ describe('canvas pointer behaviour', () => {
     fire(viewport.canvas, 'pointermove', { clientX: x + 195, clientY: y + 80, button: 0, metaKey: true });
     expect(editor.node(a.id)?.x).toBe(195);
     fire(viewport.canvas, 'pointerup', { clientX: x + 195, clientY: y + 80, button: 0 });
+  });
+
+  it('renders video controls with an empty reference slot', () => {
+    const editor = new Editor(starterProject());
+    const video = createNode('video', 0, 0);
+    editor.doc.nodes.push(video);
+    editor.select([video.id]);
+    const host = document.createElement('div');
+    renderInspector(host, {
+      editor,
+      run: () => {},
+      stop: () => {},
+      openImage: () => {},
+      removeOutput: () => {},
+      pickImage: () => {},
+      pickVideo: () => {},
+      pickFromLibrary: () => {},
+      exportWeave: () => {},
+      openLibrary: () => {},
+      openContactSheet: () => {},
+      refresh: () => {},
+      toast: () => {},
+    });
+    expect(host.textContent).toContain('视频生成');
+    expect(host.textContent).toContain('参考');
+    expect(host.querySelector('.reference-empty')).not.toBeNull();
+    host.remove();
   });
 
   it('renames a group from its title on the canvas', () => {
@@ -242,6 +270,7 @@ describe('inspector output removal', () => {
         editor.removeNodeOutput(nodeId, assetId);
       },
       pickImage: () => {},
+      pickVideo: () => {},
       pickFromLibrary: () => {},
       exportWeave: () => {},
       openLibrary: () => {},

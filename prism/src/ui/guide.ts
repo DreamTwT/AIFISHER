@@ -25,17 +25,19 @@ export function openGuide(): void {
             <path d="M78 56 H103" stroke="#6fe3ff" stroke-width="1.5" />
             <path d="M149 56 H174" stroke="#ffb184" stroke-width="1.5" />
           </svg>
-          <p>PRISM 是一张本机优先的 AI 图像工作流画布：文本写提示词，生成出图，图片做素材，拼图做排版。所有内容都保存在你自己的浏览器里。</p>
+          <p>PRISM 是一张本机优先的 AI 图像与视频工作流画布：文本写提示词，生成出图或出视频，图片与视频做素材，拼图做排版。所有内容都保存在你自己的浏览器里。</p>
         </div>
 
         <section>
           <span class="guide-no">01</span>
-          <h3>四种节点</h3>
+          <h3>六种节点</h3>
           <div class="guide-grid">
             <div><b>文本 · TEXT</b><span>写提示词、方向、风格与光线。本身不出图，连线后成为下游节点的输入。</span></div>
             <div><b>生成 · GENERATE</b><span>调用真实模型或离线示例。可设置画幅、张数、种子，也可以补充本地提示词。</span></div>
             <div><b>图片 · IMAGE</b><span>一张现有图片。可上传、从素材库放入，双击查看大图与来源信息。</span></div>
             <div><b>拼图 · COLLAGE</b><span>把直接连入的图片按列排成一张版面，可单独导出 PNG。</span></div>
+            <div><b>视频生成 · VIDEO</b><span>接文本与参考（图片/视频），生成 2–12 秒视频；可设画幅、时长与种子。</span></div>
+            <div><b>视频 · CLIP</b><span>一段现有视频。拖入或从素材库放入，作为视频节点的参考或单独预览。</span></div>
           </div>
         </section>
 
@@ -71,6 +73,14 @@ export function openGuide(): void {
 
         <section>
           <span class="guide-no">06</span>
+          <h3>视频生成与多参考</h3>
+          <p>视频生成节点的左侧接口同时接受文本、图片和视频：文本进入提示词，图片与视频成为参考，最多取前 4 个；超过时检查器会提示只取前 4 个。</p>
+          <p>参考可以来自图片节点、拖进画布的 MP4/WebM（会自动成为视频素材节点），也可以直接连上游视频节点的结果，做视频生视频。画幅限 16:9 / 9:16 / 1:1，时长 2–12 秒。</p>
+          <p>离线示例会用浏览器的 <code>MediaRecorder</code> 录一段程序化动画；真实接口走 Sora 风格的 <code>/videos</code> 异步任务，参考以 <code>input_reference</code> 上传。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">07</span>
           <h3>删除素材</h3>
           <p>素材库右上角的“多选”可以一次勾选多张：批量放入画布，或一次性删除。多选时 <kbd>⌘A</kbd> 全选，<kbd>Esc</kbd> 退出多选。</p>
           <p>素材库卡片右上角的删除按钮、图片详情页的“删除素材”，会真正删掉本机图片，并清空画布中引用它的节点。这是可以撤销的：按 <kbd>⌘Z</kbd> 能恢复节点里的图片引用。</p>
@@ -78,19 +88,19 @@ export function openGuide(): void {
         </section>
 
         <section>
-          <span class="guide-no">07</span>
+          <span class="guide-no">08</span>
           <h3>保存、导出与备份</h3>
           <p>项目自动保存在浏览器 IndexedDB。导出 JSON 时，画布里用到的图片会以 data URL 一并打包，换一台机器也能完整还原。整幅画布 PNG、拼图 PNG、素材总览 PNG 都可以直接下载。</p>
           <p>清理浏览器站点数据会删除本地项目。重要的项目请定期导出 JSON。</p>
         </section>
 
         <section>
-          <span class="guide-no">08</span>
+          <span class="guide-no">09</span>
           <h3>键盘</h3>
           <div class="keys-table">
             <div><kbd>⌘K</kbd><span>命令面板</span></div>
             <div><kbd>⌘S</kbd><span>保存</span></div>
-            <div><kbd>T / G / W / I</kbd><span>新增文本 / 生成 / 拼图 / 图片节点</span></div>
+            <div><kbd>T / G / V / W / I</kbd><span>新增文本 / 生成 / 视频 / 拼图 / 图片节点</span></div>
             <div><kbd>⌘G / ⇧⌘G</kbd><span>编组 / 解散编组</span></div>
             <div><kbd>Alt + 点击</kbd><span>选中整组</span></div>
             <div><kbd>双击组标题</kbd><span>重命名编组</span></div>
@@ -106,11 +116,11 @@ export function openGuide(): void {
         </section>
 
         <section>
-          <span class="guide-no">09</span>
+          <span class="guide-no">10</span>
           <h3>一句话原则</h3>
           <p class="guide-quote">先把提示词写清楚，再让生成节点去试；一次只改一个变量。</p>
         </section>
-        <footer class="guide-foot">PRISM · 本机优先的 AI 图像工作台</footer>
+        <footer class="guide-foot">PRISM · 本机优先的 AI 图像与视频工作台</footer>
       </div>
     </div>`;
   document.body.appendChild(backdrop);

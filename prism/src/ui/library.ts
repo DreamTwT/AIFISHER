@@ -9,6 +9,8 @@ export interface LibraryOptions {
   onUse: (assetId: ID) => void;
   /** 批量放入画布；不传时素材库只提供多选删除 */
   onUseMany?: (assetIds: ID[]) => void;
+  /** 只显示图片或只显示视频；不传时两者都显示 */
+  filter?: 'image' | 'video';
   onDelete?: (assetId: ID) => boolean | Promise<boolean>;
   onDeleteMany?: (assetIds: ID[]) => boolean | Promise<boolean>;
 }
@@ -21,7 +23,7 @@ export function openLibrary(options: LibraryOptions): void {
       <header class="library-head">
         <div class="library-title">
           <div class="eyebrow">LIBRARY / 素材库</div>
-          <h2>所有素材</h2>
+          <h2>${options.filter === 'video' ? '所有视频' : options.filter === 'image' ? '所有图片' : '所有素材'}</h2>
         </div>
         <div class="library-tools">
           <label class="search-box">${icon('search', 15)}<input type="search" placeholder="按名称或提示词搜索" /></label>
@@ -59,6 +61,8 @@ export function openLibrary(options: LibraryOptions): void {
 
   const visibleAssets = (): AssetMeta[] =>
     allAssets().filter((asset) => {
+      const kind = asset.kind ?? 'image';
+      if (options.filter && kind !== options.filter) return false;
       if (!query) return true;
       return `${asset.name} ${asset.prompt ?? ''} ${asset.model ?? ''}`.toLowerCase().includes(query);
     });
@@ -118,12 +122,19 @@ export function openLibrary(options: LibraryOptions): void {
     item.setAttribute('role', 'button');
     if (picked.has(asset.id)) item.classList.add('picked');
     const url = getAssetUrl(asset.id);
+    const isVideo = asset.kind === 'video';
     item.innerHTML = `
       <span class="asset-check">${icon('check', 13)}</span>
-      <div class="asset-thumb">${url ? `<img alt="" src="${url}" loading="lazy" />` : '<span>NO PREVIEW</span>'}</div>
+      <div class="asset-thumb">${
+        url
+          ? isVideo
+            ? `<video src="${url}" muted playsinline preload="metadata"></video><span class="asset-play">▶</span>`
+            : `<img alt="" src="${url}" loading="lazy" />`
+          : '<span>NO PREVIEW</span>'
+      }</div>
       <div class="asset-body">
         <strong>${escape(asset.name)}</strong>
-        <span>${asset.width}×${asset.height} · ${formatBytes(asset.size)}</span>
+        <span>${asset.width}×${asset.height} · ${formatBytes(asset.size)}${asset.duration ? ` · ${asset.duration.toFixed(1)}s` : ''}</span>
         <span class="asset-when">${formatWhen(asset.createdAt)}${asset.seed ? ` · S${asset.seed}` : ''}</span>
       </div>
       <span class="asset-use">放入画布 ${icon('arrow', 13)}</span>
@@ -135,7 +146,7 @@ export function openLibrary(options: LibraryOptions): void {
       }
       options.onUse(asset.id);
       close();
-      showToast('图片已放入画布', 'success');
+      showToast(isVideo ? '视频已放入画布' : '图片已放入画布', 'success');
     });
     item.addEventListener('keydown', (event) => {
       if (event.target !== item) return;
@@ -161,10 +172,13 @@ export function openLibrary(options: LibraryOptions): void {
   };
 
   const upload = async (): Promise<void> => {
-    const files = (await pickFiles('image/*', true)).filter((file) => file.type.startsWith('image/'));
+    const accept = options.filter === 'video' ? 'video/*' : options.filter === 'image' ? 'image/*' : 'image/*,video/*';
+    const files = (await pickFiles(accept, true)).filter((file) =>
+      options.filter === 'video' ? file.type.startsWith('video/') : file.type.startsWith('image/') || (options.filter !== 'image' && file.type.startsWith('video/')),
+    );
     if (!files.length) return;
     for (const file of files) await addAsset(file, { name: file.name });
-    showToast(`已放入 ${files.length} 张图片`, 'success');
+    showToast(`已放入 ${files.length} 个素材`, 'success');
   };
 
   const toggleSelectMode = (): void => {
@@ -249,17 +263,25 @@ export interface AssetDetailOptions {
 
 export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = {}): void {
   const url = getAssetUrl(asset.id);
+  const isVideo = asset.kind === 'video';
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop detail-backdrop';
   const image = getAssetImage(asset.id);
   backdrop.innerHTML = `
     <div class="asset-detail" role="dialog" aria-modal="true">
-      <div class="detail-visual">${url ? `<img alt="" src="${url}" />` : '<span>NO PREVIEW</span>'}</div>
+      <div class="detail-visual">${
+        url
+          ? isVideo
+            ? `<video src="${url}" controls playsinline preload="metadata"></video>`
+            : `<img alt="" src="${url}" />`
+          : '<span>NO PREVIEW</span>'
+      }</div>
       <aside class="detail-side">
-        <div class="detail-top"><div class="eyebrow">ASSET / 图片</div><button class="icon-btn" data-act="close" aria-label="关闭">${icon('close', 16)}</button></div>
+        <div class="detail-top"><div class="eyebrow">ASSET / ${isVideo ? '视频' : '图片'}</div><button class="icon-btn" data-act="close" aria-label="关闭">${icon('close', 16)}</button></div>
         <h2>${escape(asset.name)}</h2>
         <dl>
           <div><dt>尺寸</dt><dd>${image ? `${image.naturalWidth} × ${image.naturalHeight}` : `${asset.width} × ${asset.height}`}</dd></div>
+          ${asset.duration ? `<div><dt>时长</dt><dd>${asset.duration.toFixed(1)} 秒</dd></div>` : ''}
           <div><dt>来源</dt><dd>${asset.source === 'upload' ? '上传' : asset.model || '本机生成'}</dd></div>
           ${asset.seed ? `<div><dt>种子</dt><dd>${asset.seed}</dd></div>` : ''}
           <div><dt>时间</dt><dd>${formatWhen(asset.createdAt)}</dd></div>

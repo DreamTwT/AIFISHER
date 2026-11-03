@@ -35,6 +35,7 @@ export interface ViewportHooks {
   onToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
   onOpenImage: (assetId: ID) => void;
   onPickImage: (nodeId: ID) => void;
+  onPickVideo: (nodeId: ID) => void;
   onEditText: (node: SceneNode) => void;
   onInteractionEnd: () => void;
 }
@@ -638,12 +639,14 @@ export class Viewport {
     const node = nodeAt(this.editor.doc, world);
     if (node) {
       this.editor.select([node.id]);
-      if (node.kind === 'prompt' || node.kind === 'render') {
+      if (node.kind === 'prompt' || node.kind === 'render' || node.kind === 'video') {
         this.hooks.onEditText(node);
-      } else if (node.kind === 'image' && node.assetId) {
+      } else if ((node.kind === 'image' || node.kind === 'clip') && node.assetId) {
         this.hooks.onOpenImage(node.assetId);
       } else if (node.kind === 'image') {
         this.hooks.onPickImage(node.id);
+      } else if (node.kind === 'clip') {
+        this.hooks.onPickVideo(node.id);
       }
       return;
     }
@@ -688,6 +691,11 @@ export class Viewport {
         if (node.assetIds.length) add('清空生成结果', '素材保留', () => this.editor.removeNodeOutput(node.id));
       }
       if (node.kind === 'image' && node.assetId) add('移除图片', '素材保留', () => this.editor.removeNodeOutput(node.id));
+      if (node.kind === 'clip' && node.assetId) add('移除视频', '素材保留', () => this.editor.removeNodeOutput(node.id));
+      if (node.kind === 'video') {
+        add('生成视频', 'R', () => window.dispatchEvent(new CustomEvent('prism:run-node', { detail: node.id })));
+        if (node.assetIds.length) add('清空生成结果', '素材保留', () => this.editor.removeNodeOutput(node.id));
+      }
       add('复制', '⌘D', () => {
         this.editor.select([node.id]);
         this.editor.duplicateSelection();
@@ -763,22 +771,31 @@ export class Viewport {
 
   private onDrop = async (event: DragEvent): Promise<void> => {
     event.preventDefault();
-    const files = [...(event.dataTransfer?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+    const files = [...(event.dataTransfer?.files ?? [])].filter(
+      (file) => file.type.startsWith('image/') || file.type.startsWith('video/'),
+    );
     if (!files.length) return;
     const point = this.screenPoint(event);
     const world = this.toWorld(point);
     for (let index = 0; index < files.length; index += 1) {
-      const meta = await addAsset(files[index], { name: files[index].name });
-      const node = this.editor.addNode('image', world.x + index * 40, world.y + index * 40, {
+      const file = files[index];
+      const meta = await addAsset(file, { name: file.name });
+      const isVideo = meta.kind === 'video';
+      const node = this.editor.addNode(isVideo ? 'clip' : 'image', world.x + index * 40, world.y + index * 40, {
         assetId: meta.id,
-        caption: files[index].name,
-        title: '图片',
+        caption: file.name,
+        title: isVideo ? '视频' : '图片',
       });
       node.w = 320;
       node.h = 322;
       this.editor.emit();
     }
-    this.hooks.onToast(`已放入 ${files.length} 张图片`, 'success');
+    const videos = files.filter((file) => file.type.startsWith('video/')).length;
+    const images = files.length - videos;
+    this.hooks.onToast(
+      images && videos ? `已放入 ${images} 张图片、${videos} 个视频` : videos ? `已放入 ${videos} 个视频` : `已放入 ${images} 张图片`,
+      'success',
+    );
   };
 
   private onKeyDown = (event: KeyboardEvent): void => {

@@ -91,6 +91,8 @@ const ACCEPTS: Record<NodeKind, NodeKind[]> = {
   render: ['prompt'],
   image: [],
   weave: ['image', 'render'],
+  video: ['prompt', 'image', 'clip', 'video'],
+  clip: [],
 };
 
 export function portVisible(node: SceneNode, side: 'in' | 'out'): boolean {

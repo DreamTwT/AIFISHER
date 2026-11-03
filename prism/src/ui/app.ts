@@ -1,4 +1,4 @@
-import { addAsset, allAssets, assetsVersion, getAssetMeta, getAssetUrl, hydrateAssets, removeAsset, subscribeAssets } from '../core/assets';
+import { addAsset, allAssets, assetsVersion, getAssetMeta, getAssetPoster, getAssetUrl, hydrateAssets, removeAsset, subscribeAssets } from '../core/assets';
 import { listProjects, putProject, removeProject } from '../core/db';
 import { Editor } from '../core/editor';
 import { contentBounds, rectsOverlap } from '../core/geometry';
@@ -8,7 +8,7 @@ import { NODE_LABEL, NODE_SIZE, type ID, type NodeKind, type Project } from '../
 import { formatWhen, isTextTarget } from '../core/util';
 import { renderSample } from '../runtime/demo';
 import { exportCanvas, exportProject, exportWeave, importProject } from '../runtime/export';
-import { cancelRender, runAll, runRender, runSelection } from '../runtime/runner';
+import { cancelRender, runAll, runRender, runSelection, runVideo } from '../runtime/runner';
 import { buildCommands, openPalette, type Command } from './commands';
 import { openContactSheet } from './contactsheet';
 import { pickFiles } from './files';
@@ -90,6 +90,7 @@ class App {
       onToast: showToast,
       onOpenImage: (assetId) => this.openAsset(assetId),
       onPickImage: (nodeId) => void this.pickImageFor(nodeId),
+      onPickVideo: (nodeId) => void this.pickVideoFor(nodeId),
       onEditText: (node) => this.focusComposer(node.id),
       onInteractionEnd: () => this.rebuildInspector(),
     });
@@ -165,7 +166,7 @@ class App {
     root.className = 'app';
     root.innerHTML = `
       <header class="topbar">
-        <div class="brand" title="PRISM · 本机优先的 AI 图像工作台">
+        <div class="brand" title="PRISM · 本机优先的 AI 图像与视频工作台">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 28 28"><path d="M14 3.5 25.5 22.5H2.5Z" stroke="currentColor" stroke-width="1.35" fill="none"/><path d="M1 14h9" stroke="currentColor" stroke-width="1.1"/><path d="m12 14 4.2-3.2M12 14h5.6M12 14l4.2 3.2" stroke="currentColor" stroke-width="1" opacity=".66"/></svg>
           </span>
@@ -196,6 +197,7 @@ class App {
           <div class="rail-group">
             <button class="tool kind-prompt" data-add="prompt" data-tip="文本 · T">${icon('prompt', 17)}<span class="tool-badge">文</span></button>
             <button class="tool kind-render" data-add="render" data-tip="生成 · G">${icon('render', 17)}<span class="tool-badge">生</span></button>
+            <button class="tool kind-video" data-add="video" data-tip="视频生成 · V">${icon('video', 17)}<span class="tool-badge">视</span></button>
             <button class="tool kind-weave" data-add="weave" data-tip="拼图 · W">${icon('weave', 17)}<span class="tool-badge">拼</span></button>
             <button class="tool kind-image" data-add="image" data-tip="图片 · I">${icon('image', 17)}<span class="tool-badge">图</span></button>
           </div>
@@ -287,7 +289,7 @@ class App {
       if (!target) return;
       const add = target.dataset.add;
       if (add) {
-        this.addNode(add as 'prompt' | 'render' | 'image' | 'weave');
+        this.addNode(add as 'prompt' | 'render' | 'image' | 'weave' | 'video');
         return;
       }
       const empty = target.dataset.empty;
@@ -385,7 +387,7 @@ class App {
     window.addEventListener('prism:run-node', ((event: CustomEvent<ID>) => {
       void this.runNode(event.detail);
     }) as EventListener);
-    window.addEventListener('prism:add-node', ((event: CustomEvent<'prompt' | 'render' | 'image' | 'weave'>) => {
+    window.addEventListener('prism:add-node', ((event: CustomEvent<'prompt' | 'render' | 'image' | 'weave' | 'video'>) => {
       this.addNode(event.detail);
     }) as EventListener);
 
@@ -482,6 +484,7 @@ class App {
       this.editor.clearSelection();
       return;
     }
+    if (mod) return;
     switch (event.key.toLowerCase()) {
       case 't':
         this.addNode('prompt');
@@ -498,6 +501,9 @@ class App {
         break;
       case 'i':
         this.addNode('image');
+        break;
+      case 'v':
+        this.addNode('video');
         break;
       case 'r':
         void this.runSelection();
@@ -517,7 +523,7 @@ class App {
 
   private focusComposer(nodeId: ID): void {
     const node = this.editor.node(nodeId);
-    if (!node || (node.kind !== 'prompt' && node.kind !== 'render')) return;
+    if (!node || (node.kind !== 'prompt' && node.kind !== 'render' && node.kind !== 'video')) return;
     this.composerDismissedFor = null;
     this.editor.select([nodeId]);
     this.syncComposer();
@@ -544,7 +550,7 @@ class App {
     if (!node) return;
     const value = this.composerInput.value;
     if (node.kind === 'prompt') this.editor.updateNode(node.id, { text: value });
-    else if (node.kind === 'render') this.editor.updateNode(node.id, { prompt: value });
+    else if (node.kind === 'render' || node.kind === 'video') this.editor.updateNode(node.id, { prompt: value });
     this.composerCount.textContent = `${value.trim().length} 字符`;
     this.resizeComposer();
     const note = this.inspectorHost.querySelector<HTMLElement>(`[data-node-note="${node.id}"]`);
@@ -553,7 +559,7 @@ class App {
 
   private runFromComposer(): void {
     const node = this.composerNodeId ? this.editor.node(this.composerNodeId) : undefined;
-    if (node?.kind === 'render') void this.runNode(node.id);
+    if (node?.kind === 'render' || node?.kind === 'video') void this.runNode(node.id);
     else void this.runAll();
   }
 
@@ -566,7 +572,7 @@ class App {
     }
     const node =
       this.editor.selection.size === 1 ? this.editor.node([...this.editor.selection][0]) : undefined;
-    const usable = node && (node.kind === 'prompt' || node.kind === 'render');
+    const usable = node && (node.kind === 'prompt' || node.kind === 'render' || node.kind === 'video');
     if (!usable || this.composerDismissedFor === node.id) {
       const wasFocused = document.activeElement === this.composerInput;
       this.composerEl.hidden = true;
@@ -583,12 +589,16 @@ class App {
     this.composerKind.className = `composer-kind kind-${node.kind}`;
     this.composerName.textContent = node.title || NODE_LABEL[node.kind];
     this.composerInput.placeholder =
-      node.kind === 'prompt' ? '写下画面、风格与光线…' : '补充一句提示词；留空则读取上游文本…';
+      node.kind === 'prompt'
+        ? '写下画面、风格与光线…'
+        : node.kind === 'video'
+          ? '描述画面、运镜与节奏；参考图从左侧接口连入…'
+          : '补充一句提示词；留空则读取上游文本…';
     if (switching || document.activeElement !== this.composerInput) this.composerInput.value = value;
     this.composerCount.textContent = `${value.trim().length} 字符`;
     this.composerRun.innerHTML =
-      node.kind === 'render'
-        ? `${icon('play', 13)} ${node.status === 'done' ? '再生成一次' : '开始生成'}`
+      node.kind === 'render' || node.kind === 'video'
+        ? `${icon('play', 13)} ${node.status === 'done' ? '再生成一次' : node.kind === 'video' ? '生成视频' : '开始生成'}`
         : `${icon('play', 13)} 生成全部`;
     this.composerEl.hidden = false;
     this.stage.parentElement?.classList.add('composer-open');
@@ -601,7 +611,7 @@ class App {
     const signature = [
       [...this.editor.selection].sort().join(','),
       [...this.editor.threadSelection].sort().join(','),
-      nodes.map((node) => `${node.id}:${node.kind}:${node.kind === 'render' ? `${node.status}:${node.assetIds.length}` : node.kind === 'image' ? node.assetId ?? '' : ''}`).join('|'),
+      nodes.map((node) => `${node.id}:${node.kind}:${node.kind === 'render' || node.kind === 'video' ? `${node.status}:${node.assetIds.length}` : node.kind === 'image' || node.kind === 'clip' ? node.assetId ?? '' : ''}`).join('|'),
       assetsVersion(),
       this.editor.doc.threads.length,
       (this.editor.doc.groups ?? []).map((group) => `${group.id}:${group.nodeIds.join(',')}`).join('|'),
@@ -623,9 +633,11 @@ class App {
       render: nodes.filter((node) => node.kind === 'render').length,
       image: nodes.filter((node) => node.kind === 'image').length,
       weave: nodes.filter((node) => node.kind === 'weave').length,
+      video: nodes.filter((node) => node.kind === 'video').length,
+      clip: nodes.filter((node) => node.kind === 'clip').length,
     };
     const groupCount = (this.editor.doc.groups ?? []).length;
-    this.statusLeft.innerHTML = `<span class="status-mark"></span>文本 ${counts.prompt} <i></i> 生成 ${counts.render} <i></i> 图片 ${counts.image} <i></i> 拼图 ${counts.weave} <i></i> 连线 ${this.editor.doc.threads.length}${groupCount ? ` <i></i> 编组 ${groupCount}` : ''}`;
+    this.statusLeft.innerHTML = `<span class="status-mark"></span>文本 ${counts.prompt} <i></i> 生成 ${counts.render} <i></i> 视频 ${counts.video} <i></i> 素材 ${counts.image + counts.clip} <i></i> 拼图 ${counts.weave} <i></i> 连线 ${this.editor.doc.threads.length}${groupCount ? ` <i></i> 编组 ${groupCount}` : ''}`;
     const selectedGroup = this.editor.selectionGroup();
     this.statusMiddle.textContent = this.editor.selection.size
       ? selectedGroup
@@ -657,6 +669,7 @@ class App {
       openImage: (assetId) => this.openAsset(assetId),
       removeOutput: (nodeId, assetId) => this.removeOutput(nodeId, assetId),
       pickImage: (nodeId) => void this.pickImageFor(nodeId),
+      pickVideo: (nodeId) => void this.pickVideoFor(nodeId),
       pickFromLibrary: (nodeId) => this.pickFromLibrary(nodeId),
       exportWeave: (nodeId) => void this.exportWeave(nodeId),
       openLibrary: () => this.openLibrary(),
@@ -809,7 +822,7 @@ class App {
     return { x: base.x + this.editor.doc.nodes.length * 24, y: base.y + this.editor.doc.nodes.length * 24 };
   }
 
-  private addNode(kind: 'prompt' | 'render' | 'image' | 'weave'): void {
+  private addNode(kind: 'prompt' | 'render' | 'image' | 'weave' | 'video'): void {
     if (kind === 'image') {
       this.openLibrary();
       return;
@@ -817,6 +830,7 @@ class App {
     const selected = this.editor.selectedNodes();
     const selectedPrompts = selected.filter((node) => node.kind === 'prompt');
     const selectedRenders = selected.filter((node) => node.kind === 'render');
+    const selectedMedia = selected.filter((node) => node.kind === 'image' || node.kind === 'clip' || node.kind === 'video');
     const camera = this.editor.project.camera;
     const rect = this.stage.getBoundingClientRect();
     let center = {
@@ -824,7 +838,7 @@ class App {
       y: (rect.height / 2 - camera.y) / camera.z,
     };
     const size = NODE_SIZE[kind];
-    if (kind === 'render' && selectedPrompts.length) {
+    if ((kind === 'render' || kind === 'video') && selectedPrompts.length) {
       const anchor = selectedPrompts[selectedPrompts.length - 1];
       center = {
         x: anchor.x + anchor.w + 52 + size.w / 2,
@@ -843,17 +857,25 @@ class App {
     if (kind === 'render') {
       selectedPrompts.forEach((prompt) => this.editor.connect(prompt.id, node.id, false));
     }
+    if (kind === 'video') {
+      (selectedPrompts.length ? selectedPrompts : selectedMedia).forEach((prompt) => {
+        if (prompt.kind === 'prompt') this.editor.connect(prompt.id, node.id, false);
+      });
+      selectedMedia.slice(0, 4).forEach((media) => this.editor.connect(media.id, node.id, false));
+    }
     if (kind === 'prompt') {
       selectedRenders.forEach((render) => this.editor.connect(node.id, render.id, false));
     }
     this.editor.end(true);
     this.viewport.ensureVisible(node);
     this.syncUI();
-    if (kind === 'prompt') this.focusComposer(node.id);
+    if (kind === 'prompt' || kind === 'video') this.focusComposer(node.id);
   }
 
   private async runNode(nodeId: ID): Promise<void> {
-    await runRender(this.editor, nodeId, { notify: showToast });
+    const node = this.editor.node(nodeId);
+    if (node?.kind === 'video') await runVideo(this.editor, nodeId, { notify: showToast });
+    else await runRender(this.editor, nodeId, { notify: showToast });
     this.syncUI();
     this.scheduleSave();
   }
@@ -870,7 +892,7 @@ class App {
   }
 
   private async runAll(): Promise<void> {
-    const count = this.editor.doc.nodes.filter((node) => node.kind === 'render').length;
+    const count = this.editor.doc.nodes.filter((node) => node.kind === 'render' || node.kind === 'video').length;
     if (!count) {
       showToast('先放一个生成节点', 'info');
       return;
@@ -893,10 +915,11 @@ class App {
           y: (rect.height / 2 - camera.y) / camera.z,
         };
         const meta = getAssetMeta(assetId);
-        this.editor.addNode('image', Math.round(world.x - 150), Math.round(world.y - 150), {
+        const kind = meta?.kind === 'video' ? 'clip' : 'image';
+        this.editor.addNode(kind, Math.round(world.x - 150), Math.round(world.y - 150), {
           assetId,
           caption: meta?.name ?? '',
-          title: '图片',
+          title: kind === 'clip' ? '视频' : '图片',
         });
       },
     });
@@ -911,8 +934,20 @@ class App {
     showToast('图片已替换', 'success');
   }
 
+  private async pickVideoFor(nodeId: ID): Promise<void> {
+    const files = (await pickFiles('video/*', false)).filter((file) => file.type.startsWith('video/'));
+    if (!files.length) return;
+    const file = files[0];
+    const meta = await addAsset(file, { name: file.name });
+    this.editor.updateNode(nodeId, { assetId: meta.id, caption: file.name }, true);
+    showToast('视频已替换', 'success');
+  }
+
   private pickFromLibrary(nodeId: ID): void {
+    const node = this.editor.node(nodeId);
+    const filter = node?.kind === 'clip' ? 'video' : 'image';
     openLibrary({
+      filter,
       onDelete: (assetId) => this.deleteAssets([assetId]),
       onDeleteMany: (assetIds) => this.deleteAssets(assetIds),
       onUse: (assetId) => {
@@ -949,11 +984,12 @@ class App {
     metas.forEach((meta, index) => {
       const col = index % cols;
       const row = Math.floor(index / cols);
+      const kind = meta.kind === 'video' ? 'clip' : 'image';
       this.editor.addNode(
-        'image',
+        kind,
         Math.round(originX + col * stepX),
         Math.round(originY + row * stepY),
-        { assetId: meta.id, caption: meta.name, title: '图片' },
+        { assetId: meta.id, caption: meta.name, title: kind === 'clip' ? '视频' : '图片' },
         false,
       );
     });
@@ -968,7 +1004,7 @@ class App {
     const message =
       metas.length === 1
         ? `删除「${metas[0].name}」？画布中引用它的节点会被一并清空。`
-        : `删除选中的 ${metas.length} 张图片？画布中引用它们的节点会被一并清空。`;
+        : `删除选中的 ${metas.length} 个素材？画布中引用它们的节点会被一并清空。`;
     if (!window.confirm(message)) return false;
     const removed: ID[] = [];
     for (const meta of metas) {
@@ -999,7 +1035,7 @@ class App {
   private openAsset(assetId: ID): void {
     const meta = getAssetMeta(assetId);
     if (!meta) {
-      showToast('这张图片不在本机', 'error');
+      showToast('这个素材不在本机', 'error');
       return;
     }
     openAssetDetail(meta, {
@@ -1011,10 +1047,11 @@ class App {
           x: (rect.width / 2 - camera.x) / camera.z,
           y: (rect.height / 2 - camera.y) / camera.z,
         };
-        this.editor.addNode('image', Math.round(world.x - 150), Math.round(world.y - 150), {
+        const kind = meta.kind === 'video' ? 'clip' : 'image';
+        this.editor.addNode(kind, Math.round(world.x - 150), Math.round(world.y - 150), {
           assetId: id,
           caption: meta.name,
-          title: '图片',
+          title: kind === 'clip' ? '视频' : '图片',
         });
       },
     });
@@ -1052,8 +1089,9 @@ class App {
       const card = document.createElement('button');
       card.className = 'proof-card';
       card.title = asset.name;
+      const poster = asset.kind === 'video' ? getAssetPoster(asset.id) : getAssetUrl(asset.id);
       card.innerHTML = `
-        <div class="proof-thumb">${getAssetUrl(asset.id) ? `<img alt="" src="${getAssetUrl(asset.id)}" loading="lazy" />` : ''}</div>
+        <div class="proof-thumb">${poster ? `<img alt="" src="${poster}" loading="lazy" />` : ''}${asset.kind === 'video' ? '<span class="proof-play">▶</span>' : ''}</div>
         <div class="proof-meta"><span>${String(index + 1).padStart(2, '0')}</span><strong>${escape(asset.name)}</strong></div>`;
       card.addEventListener('click', () => this.openAsset(asset.id));
       track.appendChild(card);
@@ -1080,7 +1118,7 @@ class App {
 
   private async exportProject(): Promise<void> {
     await exportProject(this.editor);
-    showToast('项目 JSON 已导出（含图片）', 'success');
+    showToast('项目 JSON 已导出（含图片与视频）', 'success');
   }
 
   private exportPng(): void {
@@ -1234,7 +1272,17 @@ class App {
       const oy = pad + ((h - pad * 2) - bounds.h * scale) / 2;
       for (const node of this.editor.doc.nodes) {
         ctx.fillStyle =
-          node.kind === 'prompt' ? '#ffb184' : node.kind === 'render' ? '#6fe3ff' : node.kind === 'image' ? '#a7b9ff' : '#ff9fb2';
+          node.kind === 'prompt'
+            ? '#ffb184'
+            : node.kind === 'render'
+              ? '#6fe3ff'
+              : node.kind === 'video'
+                ? '#d8b4fe'
+                : node.kind === 'clip'
+                  ? '#8ef0c8'
+                  : node.kind === 'image'
+                    ? '#a7b9ff'
+                    : '#ff9fb2';
         ctx.globalAlpha = this.editor.selection.has(node.id) ? 1 : 0.65;
         ctx.fillRect(
           ox + (node.x - bounds.x) * scale,

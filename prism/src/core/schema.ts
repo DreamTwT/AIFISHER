@@ -1,5 +1,5 @@
 import type { AssetMeta, Doc, Group, NodeKind, Project, SceneNode, Thread } from './types';
-import { ASPECTS } from './types';
+import { ASPECTS, type Aspect } from './types';
 
 export interface ProjectAsset {
   meta: AssetMeta;
@@ -14,7 +14,7 @@ export interface ProjectFile {
   assets: ProjectAsset[];
 }
 
-const KINDS: NodeKind[] = ['prompt', 'render', 'image', 'weave'];
+const KINDS: NodeKind[] = ['prompt', 'render', 'image', 'weave', 'video', 'clip'];
 
 function text(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
@@ -56,7 +56,20 @@ export function sanitizeDoc(input: unknown): Doc {
       y: number(record.y, 0),
       w: Math.max(240, Math.min(760, number(record.w, 320))),
       h: Math.max(140, Math.min(820, number(record.h, 300))),
-      title: text(record.title, kind === 'prompt' ? '文本' : kind === 'render' ? '生成' : kind === 'image' ? '图片' : '拼图'),
+      title: text(
+        record.title,
+        kind === 'prompt'
+          ? '文本'
+          : kind === 'render'
+            ? '生成'
+            : kind === 'image'
+              ? '图片'
+              : kind === 'video'
+                ? '视频生成'
+                : kind === 'clip'
+                  ? '视频'
+                  : '拼图',
+      ),
     };
     if (kind === 'prompt') {
       const role = record.role === 'style' || record.role === 'note' ? record.role : 'direction';
@@ -84,6 +97,35 @@ export function sanitizeDoc(input: unknown): Doc {
         error: typeof record.error === 'string' ? record.error : undefined,
       });
     } else if (kind === 'image') {
+      nodes.push({
+        ...base,
+        kind,
+        assetId: typeof record.assetId === 'string' ? record.assetId : undefined,
+        caption: text(record.caption),
+      });
+    } else if (kind === 'video') {
+      const aspect = ASPECTS.some((itemAspect) => itemAspect.id === record.aspect)
+        ? (record.aspect as Aspect)
+        : ('16:9' as const);
+      const status =
+        record.status === 'running' || record.status === 'done' || record.status === 'error'
+          ? record.status
+          : 'idle';
+      nodes.push({
+        ...base,
+        kind,
+        prompt: text(record.prompt),
+        aspect,
+        seconds: Math.max(2, Math.min(12, Math.round(number(record.seconds, 4)))),
+        seed: typeof record.seed === 'number' ? record.seed : null,
+        assetIds: Array.isArray(record.assetIds)
+          ? record.assetIds.filter((value): value is string => typeof value === 'string')
+          : [],
+        status: status === 'running' ? 'idle' : status,
+        progress: Math.max(0, Math.min(100, number(record.progress, status === 'done' ? 100 : 0))),
+        error: typeof record.error === 'string' ? record.error : undefined,
+      });
+    } else if (kind === 'clip') {
       nodes.push({
         ...base,
         kind,
@@ -187,6 +229,8 @@ export function sanitizeProjectFile(input: unknown): ProjectFile {
           size: number(metaRaw.size, 0),
           createdAt: number(metaRaw.createdAt, Date.now()),
           source: metaRaw.source === 'upload' ? 'upload' : 'render',
+          kind: metaRaw.kind === 'video' ? 'video' : metaRaw.kind === 'image' ? 'image' : undefined,
+          duration: typeof metaRaw.duration === 'number' ? metaRaw.duration : undefined,
           prompt: typeof metaRaw.prompt === 'string' ? metaRaw.prompt : undefined,
           seed: typeof metaRaw.seed === 'number' ? metaRaw.seed : undefined,
           model: typeof metaRaw.model === 'string' ? metaRaw.model : undefined,
@@ -201,8 +245,8 @@ export function sanitizeProjectFile(input: unknown): ProjectFile {
 export function collectAssetIds(doc: Doc): string[] {
   const ids = new Set<string>();
   for (const node of doc.nodes) {
-    if (node.kind === 'image' && node.assetId) ids.add(node.assetId);
-    if (node.kind === 'render') node.assetIds.forEach((assetId) => ids.add(assetId));
+    if ((node.kind === 'image' || node.kind === 'clip') && node.assetId) ids.add(node.assetId);
+    if (node.kind === 'render' || node.kind === 'video') node.assetIds.forEach((assetId) => ids.add(assetId));
   }
   return [...ids];
 }

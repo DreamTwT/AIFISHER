@@ -7,7 +7,7 @@
 
 export type ID = string;
 
-export type NodeKind = 'prompt' | 'render' | 'image' | 'weave';
+export type NodeKind = 'prompt' | 'render' | 'image' | 'weave' | 'video' | 'clip';
 
 export type RunState = 'idle' | 'running' | 'done' | 'error';
 
@@ -57,6 +57,25 @@ export interface ImageNode extends NodeBase {
   caption: string;
 }
 
+export interface VideoNode extends NodeBase {
+  kind: 'video';
+  /** 留空时只使用上游提示词 */
+  prompt: string;
+  aspect: Aspect;
+  seconds: number;
+  seed: number | null;
+  assetIds: ID[];
+  status: RunState;
+  progress: number;
+  error?: string;
+}
+
+export interface ClipNode extends NodeBase {
+  kind: 'clip';
+  assetId?: ID;
+  caption: string;
+}
+
 export interface WeaveNode extends NodeBase {
   kind: 'weave';
   columns: number;
@@ -64,7 +83,7 @@ export interface WeaveNode extends NodeBase {
   caption: string;
 }
 
-export type SceneNode = PromptNode | RenderNode | ImageNode | WeaveNode;
+export type SceneNode = PromptNode | RenderNode | ImageNode | WeaveNode | VideoNode | ClipNode;
 
 export interface Thread {
   id: ID;
@@ -111,6 +130,10 @@ export interface AssetMeta {
   size: number;
   createdAt: number;
   source: 'upload' | 'render';
+  /** 缺省视为图片 */
+  kind?: 'image' | 'video';
+  /** 视频时长（秒），仅视频素材有 */
+  duration?: number;
   prompt?: string;
   seed?: number;
   model?: string;
@@ -124,6 +147,8 @@ export interface Settings {
   endpoint: string;
   apiKey: string;
   model: string;
+  /** 视频模型；留空时沿用图像模型 */
+  videoModel?: string;
   demo: boolean;
   concurrency: number;
 }
@@ -143,13 +168,20 @@ export const NODE_LABEL: Record<NodeKind, string> = {
   render: '生成',
   image: '图片',
   weave: '拼图',
+  video: '视频生成',
+  clip: '视频',
 };
+
+/** 视频节点最多接 4 个参考（图片或视频）。 */
+export const MAX_VIDEO_REFS = 4;
 
 export const NODE_SIZE: Record<NodeKind, { w: number; h: number }> = {
   prompt: { w: 300, h: 214 },
   render: { w: 356, h: 462 },
   image: { w: 320, h: 322 },
   weave: { w: 386, h: 318 },
+  video: { w: 360, h: 452 },
+  clip: { w: 320, h: 322 },
 };
 
 export function aspectSize(aspect: Aspect, edge = 1024): { w: number; h: number } {

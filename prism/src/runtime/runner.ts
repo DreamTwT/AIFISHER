@@ -1,10 +1,10 @@
-import { addAsset } from '../core/assets';
+import { addAsset, getAssetBlob } from '../core/assets';
 import type { Editor } from '../core/editor';
 import { hasLiveProvider, settings } from '../core/settings';
 import type { Aspect, ID } from '../core/types';
 import { hashString, sleep, uid } from '../core/util';
-import { renderSample } from './demo';
-import { renderWithProvider, validateProvider } from './provider';
+import { renderSample, renderSampleVideo } from './demo';
+import { renderVideoWithProvider, renderWithProvider, validateProvider } from './provider';
 
 const controllers = new Map<ID, AbortController>();
 
@@ -94,6 +94,66 @@ export async function runRender(editor: Editor, nodeId: ID, options: RunOptions 
   }
 }
 
+export async function runVideo(editor: Editor, nodeId: ID, options: RunOptions = {}): Promise<void> {
+  const node = editor.node(nodeId);
+  if (!node || node.kind !== 'video') return;
+  if (controllers.has(nodeId)) return;
+
+  const prompt = editor.effectivePrompt(nodeId).trim();
+  if (!prompt) {
+    options.notify?.('视频节点还没有提示词：写一句，或把文本连进来', 'error');
+    editor.updateNode(nodeId, { status: 'error', error: '缺少提示词', progress: 0 });
+    return;
+  }
+  if (!hasLiveProvider()) {
+    const configError = validateProvider();
+    if (!settings().demo && configError) {
+      options.notify?.(configError, 'error');
+      editor.updateNode(nodeId, { status: 'error', error: configError, progress: 0 });
+      return;
+    }
+  }
+
+  const controller = new AbortController();
+  controllers.set(nodeId, controller);
+  const seed = node.seed ?? hashString(prompt + nodeId);
+  const references = editor
+    .referenceAssets(nodeId)
+    .map((id) => getAssetBlob(id))
+    .filter((blob): blob is Blob => Boolean(blob));
+  editor.updateNode(nodeId, { status: 'running', progress: 0, error: undefined });
+
+  try {
+    const onProgress = (value: number): void => {
+      editor.updateNode(nodeId, { progress: Math.max(1, Math.min(99, value)) }, false);
+    };
+    const blob = hasLiveProvider()
+      ? await renderVideoWithProvider(prompt, node.aspect, node.seconds, references, controller.signal, onProgress)
+      : await renderSampleVideo(prompt, node.aspect, node.seconds, seed, onProgress, controller.signal);
+    if (controller.signal.aborted) throw new DOMException('已取消', 'AbortError');
+    const meta = await addAsset(blob, {
+      name: `${node.title && node.title !== '视频生成' ? node.title : '视频'} · ${node.seconds}s`,
+      source: 'render',
+      prompt,
+      seed,
+      model: hasLiveProvider() ? settings().videoModel?.trim() || settings().model : 'prism-sample',
+    });
+    editor.updateNode(nodeId, { status: 'done', progress: 100, assetIds: [meta.id], error: undefined });
+    options.notify?.(`已生成 ${node.seconds} 秒视频`, 'success');
+  } catch (error) {
+    if (controller.signal.aborted) {
+      editor.updateNode(nodeId, { status: 'idle', progress: 0 });
+      options.notify?.('已停下这个视频任务', 'info');
+    } else {
+      const message = error instanceof Error ? error.message : '视频生成失败';
+      editor.updateNode(nodeId, { status: 'error', error: message, progress: 0 });
+      options.notify?.(message, 'error');
+    }
+  } finally {
+    controllers.delete(nodeId);
+  }
+}
+
 async function demoImage(prompt: string, aspect: Aspect, seed: number, index: number): Promise<Blob> {
   await sleep(420 + index * 140);
   return renderSample(prompt, aspect, seed, index);
@@ -102,17 +162,24 @@ async function demoImage(prompt: string, aspect: Aspect, seed: number, index: nu
 export async function runSelection(editor: Editor, options: RunOptions = {}): Promise<void> {
   const targets = editor
     .selectedNodes()
-    .filter((node) => node.kind === 'render')
+    .filter((node) => node.kind === 'render' || node.kind === 'video')
     .map((node) => node.id);
   if (!targets.length) {
     options.notify?.('先选中一个生成节点', 'info');
     return;
   }
-  await Promise.all(targets.map((id) => runRender(editor, id, options)));
+  await Promise.all(
+    targets.map((id) => {
+      const node = editor.node(id);
+      return node?.kind === 'video' ? runVideo(editor, id, options) : runRender(editor, id, options);
+    }),
+  );
 }
 
 export async function runAll(editor: Editor, options: RunOptions = {}): Promise<void> {
-  const targets = editor.doc.nodes.filter((node) => node.kind === 'render').map((node) => node.id);
+  const targets = editor.doc.nodes
+    .filter((node) => node.kind === 'render' || node.kind === 'video')
+    .map((node) => node.id);
   if (!targets.length) {
     options.notify?.('画布上还没有生成节点', 'info');
     return;
@@ -122,7 +189,10 @@ export async function runAll(editor: Editor, options: RunOptions = {}): Promise<
   const workers = Array.from({ length: concurrency }, async () => {
     while (queue.length) {
       const id = queue.shift();
-      if (id) await runRender(editor, id, options);
+      if (!id) continue;
+      const node = editor.node(id);
+      if (node?.kind === 'video') await runVideo(editor, id, options);
+      else await runRender(editor, id, options);
     }
   });
   await Promise.all(workers);

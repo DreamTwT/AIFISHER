@@ -287,3 +287,114 @@ export async function renderSample(
 
   return canvasBlob(canvas, 'image/jpeg');
 }
+
+
+/** 离线视频示例：用 Canvas 动画 + MediaRecorder 录一段短 WebM，不联网。 */
+export async function renderSampleVideo(
+  prompt: string,
+  aspect: Aspect,
+  seconds: number,
+  seed: number,
+  onProgress?: (value: number) => void,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  if (typeof MediaRecorder === 'undefined') {
+    throw new Error('当前浏览器不支持离线视频示例（MediaRecorder 不可用）');
+  }
+  const size = aspectSize(aspect, 640);
+  const width = Math.max(320, Math.min(960, size.w));
+  const height = Math.max(320, Math.min(960, size.h));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('画布不可用');
+
+  const mimeType = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find((type) =>
+    MediaRecorder.isTypeSupported(type),
+  );
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, mimeType ? { mimeType, videoBitsPerSecond: 2_200_000 } : undefined);
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (event) => {
+    if (event.data.size) chunks.push(event.data);
+  };
+  const stopped = new Promise<Blob>((resolve, reject) => {
+    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || 'video/webm' }));
+    recorder.onerror = () => reject(new Error('视频录制失败'));
+  });
+  recorder.start(240);
+  const total = Math.max(2, Math.min(12, seconds));
+  const started = performance.now();
+  await new Promise<void>((resolve) => {
+    const frame = (): void => {
+      if (signal?.aborted) {
+        resolve();
+        return;
+      }
+      const t = Math.min(1, (performance.now() - started) / (total * 1000));
+      drawDemoFrame(ctx, width, height, prompt, seed, t);
+      onProgress?.(Math.round(t * 96));
+      if (t < 1) requestAnimationFrame(frame);
+      else resolve();
+    };
+    requestAnimationFrame(frame);
+  });
+  recorder.stop();
+  stream.getTracks().forEach((track) => track.stop());
+  const blob = await stopped;
+  if (signal?.aborted) throw new DOMException('已取消', 'AbortError');
+  return blob;
+}
+
+function drawDemoFrame(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  prompt: string,
+  seed: number,
+  t: number,
+): void {
+  const palette = pickPalette(prompt);
+  const random = mulberry32(hashString(prompt) + seed);
+  const sky = ctx.createLinearGradient(0, 0, 0, height);
+  sky.addColorStop(0, palette.deep);
+  sky.addColorStop(0.62, palette.mid);
+  sky.addColorStop(1, palette.light);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, height);
+
+  const drift = Math.sin(t * Math.PI * 1.15);
+  ctx.fillStyle = palette.a;
+  ctx.globalAlpha = 0.82;
+  ctx.beginPath();
+  ctx.arc(width * (0.5 + drift * 0.16), height * (0.38 + Math.cos(t * Math.PI) * 0.06), Math.min(width, height) * 0.17, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = palette.b;
+  ctx.lineWidth = Math.max(1.4, width * 0.0038);
+  for (let index = 0; index < 7; index += 1) {
+    const offset = ((index / 7 + t * 0.22) % 1) * height;
+    ctx.globalAlpha = 0.16 + index * 0.03;
+    ctx.beginPath();
+    ctx.moveTo(0, offset);
+    ctx.bezierCurveTo(width * 0.3, offset - height * 0.09, width * 0.7, offset + height * 0.09, width, offset);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  const grain = Math.min(1400, Math.round(width * height * 0.004));
+  for (let index = 0; index < grain; index += 1) {
+    ctx.fillStyle = index % 3 === 0 ? palette.ink : palette.a;
+    ctx.globalAlpha = 0.06 + random() * 0.1;
+    ctx.fillRect(random() * width, random() * height, 1.3, 1.3);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = palette.ink;
+  ctx.globalAlpha = 0.2;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(width * 0.045, height * 0.045, width * 0.91, height * 0.91);
+  ctx.globalAlpha = 1;
+}

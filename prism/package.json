@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "PRISM — a local-first AI image workflow canvas",
+  "description": "PRISM — a local-first AI image and video workflow canvas",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5180",
     "build": "tsc --noEmit && vite build",

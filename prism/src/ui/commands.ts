@@ -28,7 +28,7 @@ export interface CommandActions {
   selectAll: () => void;
   group: () => void;
   ungroup: () => void;
-  addNode: (kind: 'prompt' | 'render' | 'image' | 'weave') => void;
+  addNode: (kind: 'prompt' | 'render' | 'image' | 'weave' | 'video') => void;
   runAll: () => void;
   runSelection: () => void;
   toggleInspector: () => void;
@@ -48,6 +48,7 @@ export function buildCommands(actions: CommandActions): Command[] {
     { id: 'contact', title: '导出素材总览', group: '项目', run: actions.exportContactSheet },
     { id: 'add-prompt', title: '添加文本节点', group: '节点', keys: 'T', run: () => actions.addNode('prompt') },
     { id: 'add-render', title: '添加生成节点', group: '节点', keys: 'G', run: () => actions.addNode('render') },
+    { id: 'add-video', title: '添加视频生成节点', group: '节点', keys: 'V', run: () => actions.addNode('video') },
     { id: 'add-image', title: '添加图片节点', group: '节点', keys: 'I', run: () => actions.addNode('image') },
     { id: 'add-weave', title: '添加拼图节点', group: '节点', keys: 'W', run: () => actions.addNode('weave') },
     { id: 'run-all', title: '生成全部', group: '生成', keys: '⌘↵', run: actions.runAll },

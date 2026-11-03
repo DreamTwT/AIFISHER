@@ -7,6 +7,7 @@ interface Entry {
   blob: Blob;
   url: string;
   image?: HTMLImageElement;
+  poster?: string;
 }
 
 const entries = new Map<ID, Entry>();
@@ -29,12 +30,69 @@ export function assetsVersion(): number {
 
 function attachImage(entry: Entry): void {
   if (entry.image) return;
+  if (entry.meta.kind === 'video') {
+    if (entry.poster) {
+      const image = new Image();
+      image.onload = () => {
+        entry.image = image;
+        emit();
+      };
+      image.src = entry.poster;
+    }
+    return;
+  }
   const image = new Image();
   image.onload = () => {
     entry.image = image;
     emit();
   };
   image.src = entry.url;
+}
+
+function probeVideo(blob: Blob): Promise<{ width: number; height: number; duration: number; poster: string }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    let settled = false;
+    const fail = (): void => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      reject(new Error('视频无法读取'));
+    };
+    const capture = (): void => {
+      if (settled) return;
+      settled = true;
+      const width = video.videoWidth || 1280;
+      const height = video.videoHeight || 720;
+      const scale = Math.min(1, 640 / Math.max(width, height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(width * scale));
+      canvas.height = Math.max(1, Math.round(height * scale));
+      const ctx = canvas.getContext('2d');
+      let poster = '';
+      try {
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        poster = canvas.toDataURL('image/jpeg', 0.8);
+      } catch {
+        poster = '';
+      }
+      URL.revokeObjectURL(url);
+      resolve({ width, height, duration: Number.isFinite(video.duration) ? video.duration : 0, poster });
+    };
+    video.onloadedmetadata = () => {
+      const target = Number.isFinite(video.duration) ? Math.min(1, video.duration * 0.15) : 0;
+      if (target > 0) video.currentTime = target;
+      else capture();
+    };
+    video.onseeked = capture;
+    video.onerror = fail;
+    video.src = url;
+    window.setTimeout(fail, 8000);
+  });
 }
 
 export async function hydrateAssets(): Promise<void> {
@@ -48,7 +106,18 @@ export async function hydrateAssets(): Promise<void> {
         url: URL.createObjectURL(record.blob),
       };
       entries.set(record.id, entry);
-      attachImage(entry);
+      if (record.kind === 'video') {
+        void probeVideo(record.blob)
+          .then((probe) => {
+            entry.poster = probe.poster;
+            if (!entry.meta.duration) entry.meta.duration = probe.duration;
+            attachImage(entry);
+            emit();
+          })
+          .catch(() => {});
+      } else {
+        attachImage(entry);
+      }
     }
     emit();
   } catch (error) {
@@ -66,6 +135,10 @@ export function getAssetMeta(id: ID | undefined): AssetMeta | undefined {
 
 export function getAssetUrl(id: ID | undefined): string | undefined {
   return id ? entries.get(id)?.url : undefined;
+}
+
+export function getAssetPoster(id: ID | undefined): string | undefined {
+  return id ? entries.get(id)?.poster : undefined;
 }
 
 export function getAssetImage(id: ID | undefined): HTMLImageElement | undefined {
@@ -92,9 +165,23 @@ export interface AddAssetOptions {
 
 export async function addAsset(blob: Blob, options: AddAssetOptions = {}): Promise<AssetMeta> {
   const id = uid('a');
+  const isVideo = blob.type.startsWith('video/');
   let width = 0;
   let height = 0;
-  if (blob.type.startsWith('image/')) {
+  let duration: number | undefined;
+  let poster: string | undefined;
+  if (isVideo) {
+    try {
+      const probe = await probeVideo(blob);
+      width = probe.width;
+      height = probe.height;
+      duration = probe.duration;
+      poster = probe.poster;
+    } catch {
+      width = 1280;
+      height = 720;
+    }
+  } else if (blob.type.startsWith('image/')) {
     try {
       const size = await imageSize(blob);
       width = size.width;
@@ -106,20 +193,22 @@ export async function addAsset(blob: Blob, options: AddAssetOptions = {}): Promi
   }
   const meta: AssetMeta = {
     id,
-    name: options.name ?? `图片 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`,
+    name: options.name ?? `${isVideo ? '视频' : '图片'} ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`,
     mime: blob.type || 'application/octet-stream',
+    kind: isVideo ? 'video' : 'image',
     width,
     height,
     size: blob.size,
     createdAt: Date.now(),
     source: options.source ?? 'upload',
+    duration,
     prompt: options.prompt,
     seed: options.seed,
     model: options.model,
   };
   const record: AssetRecord = { ...meta, blob };
   await putAsset(record);
-  const entry: Entry = { meta, blob, url: URL.createObjectURL(blob) };
+  const entry: Entry = { meta, blob, url: URL.createObjectURL(blob), poster };
   entries.set(id, entry);
   attachImage(entry);
   emit();
@@ -132,7 +221,18 @@ export async function importAsset(meta: AssetMeta, blob: Blob): Promise<void> {
   await putAsset(record);
   const entry: Entry = { meta, blob, url: URL.createObjectURL(blob) };
   entries.set(meta.id, entry);
-  attachImage(entry);
+  if (meta.kind === 'video') {
+    void probeVideo(blob)
+      .then((probe) => {
+        entry.poster = probe.poster;
+        if (!entry.meta.duration) entry.meta.duration = probe.duration;
+        attachImage(entry);
+        emit();
+      })
+      .catch(() => {});
+  } else {
+    attachImage(entry);
+  }
   emit();
 }
 
@@ -152,6 +252,12 @@ export async function assetToImage(id: ID): Promise<HTMLImageElement | undefined
   if (entry.image) return entry.image;
   attachImage(entry);
   try {
+    if (entry.meta.kind === 'video') {
+      if (!entry.poster) return undefined;
+      const image = await loadImage(entry.poster);
+      entry.image = image;
+      return image;
+    }
     const image = await loadImage(entry.url);
     entry.image = image;
     return image;

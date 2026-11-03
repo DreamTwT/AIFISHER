@@ -115,6 +115,53 @@ describe('prism graph core', () => {
     expect(editor.removeAssetReferences('gone')).toBe(false);
   });
 
+  it('accepts video generation inputs and keeps video assets separate', () => {
+    const project = starterProject();
+    const prompt = project.doc.nodes.find((node) => node.kind === 'prompt')!;
+    const image = createNode('image', -300, 600, { assetId: 'img-1' });
+    const clip = createNode('clip', 0, 600, { assetId: 'clip-1' });
+    const video = createNode('video', 300, 0, { prompt: 'slow push in', aspect: '9:16', seconds: 8 });
+    project.doc.nodes.push(image, clip, video);
+    project.doc.threads.push(
+      { id: 't-v1', from: prompt.id, to: video.id },
+      { id: 't-v2', from: image.id, to: video.id },
+      { id: 't-v3', from: clip.id, to: video.id },
+    );
+    const editor = new Editor(project);
+    expect(portVisible(video, 'in')).toBe(true);
+    expect(portVisible(video, 'out')).toBe(true);
+    expect(portVisible(clip, 'in')).toBe(false);
+    expect(portVisible(clip, 'out')).toBe(true);
+    expect(canLink(image, video)).toBe(true);
+    expect(canLink(clip, video)).toBe(true);
+    expect(editor.referenceAssets(video.id)).toEqual(['img-1', 'clip-1']);
+    expect(editor.effectivePrompt(video.id)).toContain('slow push in');
+    expect(editor.effectivePrompt(video.id)).toContain(prompt.text);
+  });
+
+  it('sanitizes video nodes and clamps the duration', () => {
+    const doc = sanitizeDoc({
+      nodes: [
+        {
+          id: 'v',
+          kind: 'video',
+          prompt: '夜晚的列车',
+          aspect: '9:16',
+          seconds: 99,
+          assetIds: ['asset-v'],
+          status: 'running',
+        },
+      ],
+    });
+    const node = doc.nodes[0];
+    expect(node.kind).toBe('video');
+    if (node.kind !== 'video') return;
+    expect(node.aspect).toBe('9:16');
+    expect(node.seconds).toBe(12);
+    expect(node.assetIds).toEqual(['asset-v']);
+    expect(node.status).toBe('idle');
+  });
+
   it('groups, renames, duplicates and ungroups with undo', () => {
     const editor = new Editor(starterProject());
     const prompts = editor.doc.nodes.filter((node) => node.kind === 'prompt');

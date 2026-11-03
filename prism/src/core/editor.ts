@@ -342,14 +342,14 @@ export class Editor {
     const before = deepClone(this.doc);
     let changed = false;
     for (const node of this.doc.nodes) {
-      if (node.kind === 'render' && node.assetIds.some((id) => ids.has(id))) {
+      if ((node.kind === 'render' || node.kind === 'video') && node.assetIds.some((id) => ids.has(id))) {
         node.assetIds = node.assetIds.filter((id) => !ids.has(id));
         if (!node.assetIds.length) {
           node.status = 'idle';
           node.progress = 0;
         }
         changed = true;
-      } else if (node.kind === 'image' && node.assetId && ids.has(node.assetId)) {
+      } else if ((node.kind === 'image' || node.kind === 'clip') && node.assetId && ids.has(node.assetId)) {
         node.assetId = undefined;
         changed = true;
       }
@@ -386,15 +386,15 @@ export class Editor {
   removeNodeOutput(nodeId: ID, assetId?: ID): boolean {
     const node = this.node(nodeId);
     if (!node) return false;
-    if (node.kind === 'render' && node.status === 'running') return false;
+    if ((node.kind === 'render' || node.kind === 'video') && node.status === 'running') return false;
     const before = deepClone(this.doc);
-    if (node.kind === 'render') {
+    if (node.kind === 'render' || node.kind === 'video') {
       node.assetIds = assetId ? node.assetIds.filter((id) => id !== assetId) : [];
       if (!node.assetIds.length) {
         node.status = 'idle';
         node.progress = 0;
       }
-    } else if (node.kind === 'image' && (!assetId || node.assetId === assetId)) {
+    } else if ((node.kind === 'image' || node.kind === 'clip') && (!assetId || node.assetId === assetId)) {
       node.assetId = undefined;
       node.caption = '';
     } else {
@@ -519,15 +519,28 @@ export class Editor {
   inputAssets(nodeId: ID): ID[] {
     const ids: ID[] = [];
     for (const node of this.upstream(nodeId)) {
-      if (node.kind === 'image' && node.assetId) ids.push(node.assetId);
+      if ((node.kind === 'image' || node.kind === 'clip') && node.assetId) ids.push(node.assetId);
       if (node.kind === 'render') ids.push(...node.assetIds);
+      if (node.kind === 'video' && node.assetIds[0]) ids.push(node.assetIds[0]);
     }
     return ids;
   }
 
+  /** 直接连入的参考素材：图片节点、视频素材节点、视频生成节点的首条结果。 */
+  referenceAssets(nodeId: ID): ID[] {
+    const ids: ID[] = [];
+    for (const id of this.incoming(nodeId)) {
+      const node = this.node(id);
+      if (!node) continue;
+      if ((node.kind === 'image' || node.kind === 'clip') && node.assetId) ids.push(node.assetId);
+      if (node.kind === 'video') ids.push(...node.assetIds);
+    }
+    return [...new Set(ids)].slice(0, 4);
+  }
+
   effectivePrompt(nodeId: ID): string {
     const node = this.node(nodeId);
-    if (!node || node.kind !== 'render') return '';
+    if (!node || (node.kind !== 'render' && node.kind !== 'video')) return '';
     const upstream = this.upstream(nodeId)
       .filter((item): item is Extract<SceneNode, { kind: 'prompt' }> => item.kind === 'prompt' && item.text.trim().length > 0)
       .reverse()

@@ -50,6 +50,29 @@ export function createNode(kind: NodeKind, x: number, y: number, patch: Partial<
         caption: '',
         ...patch,
       } as SceneNode;
+    case 'video':
+      return {
+        ...base,
+        kind,
+        title: '视频生成',
+        prompt: '',
+        aspect: '16:9',
+        seconds: 4,
+        seed: null,
+        assetIds: [],
+        status: 'idle',
+        progress: 0,
+        ...patch,
+      } as SceneNode;
+    case 'clip':
+      return {
+        ...base,
+        kind,
+        title: '视频',
+        assetId: undefined,
+        caption: '',
+        ...patch,
+      } as SceneNode;
     case 'weave':
       return {
         ...base,

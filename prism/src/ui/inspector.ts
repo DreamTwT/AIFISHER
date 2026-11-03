@@ -1,6 +1,6 @@
 import { allAssets, getAssetMeta, getAssetUrl } from '../core/assets';
 import type { Editor } from '../core/editor';
-import type { Group, ID, ImageNode, PromptNode, RenderNode, SceneNode, WeaveNode } from '../core/types';
+import type { ClipNode, Group, ID, ImageNode, PromptNode, RenderNode, SceneNode, VideoNode, WeaveNode } from '../core/types';
 import { ASPECTS as ASPECT_LIST, NODE_LABEL } from '../core/types';
 import { formatBytes } from '../core/util';
 import { icon } from './icons';
@@ -12,6 +12,7 @@ export interface InspectorDeps {
   openImage: (assetId: ID) => void;
   removeOutput: (nodeId: ID, assetId?: ID) => void;
   pickImage: (nodeId: ID) => void;
+  pickVideo: (nodeId: ID) => void;
   pickFromLibrary: (nodeId: ID) => void;
   exportWeave: (nodeId: ID) => void;
   openLibrary: () => void;
@@ -49,6 +50,8 @@ export function renderInspector(host: HTMLElement, deps: InspectorDeps): void {
     if (node.kind === 'prompt') renderPrompt(body, node, deps);
     else if (node.kind === 'render') renderRender(body, node, deps);
     else if (node.kind === 'image') renderImage(body, node, deps);
+    else if (node.kind === 'video') renderVideo(body, node, deps);
+    else if (node.kind === 'clip') renderClip(body, node, deps);
     else renderWeave(body, node, deps);
     renderCommon(body, node, deps);
     renderMembership(body, node, deps);
@@ -251,6 +254,196 @@ function renderRender(host: HTMLElement, node: RenderNode, deps: InspectorDeps):
     error.className = 'inline-error';
     error.textContent = node.error;
     section.appendChild(error);
+  }
+  host.appendChild(section);
+}
+
+function referenceStrip(node: VideoNode, deps: InspectorDeps): HTMLElement {
+  const { editor } = deps;
+  const strip = document.createElement('div');
+  strip.className = 'reference-strip';
+  const refs = editor
+    .incoming(node.id)
+    .map((id) => editor.node(id))
+    .filter((item): item is SceneNode => Boolean(item));
+  const media = refs.filter((item) => item.kind === 'image' || item.kind === 'clip' || item.kind === 'video');
+  if (!media.length) {
+    strip.innerHTML = '<div class="reference-empty">把图片或视频节点连到左侧接口，就会成为参考。</div>';
+    return strip;
+  }
+  media.forEach((item) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'reference-chip';
+    const assetId =
+      item.kind === 'image' || item.kind === 'clip' ? item.assetId : item.kind === 'video' ? item.assetIds[0] : undefined;
+    const url = getAssetUrl(assetId);
+    chip.innerHTML = `${url ? `<img alt="" src="${url}" />` : `<span>${NODE_LABEL[item.kind]}</span>`}<i>${NODE_LABEL[item.kind]}</i>`;
+    chip.title = item.title || NODE_LABEL[item.kind];
+    chip.addEventListener('click', () => {
+      if (assetId) deps.openImage(assetId);
+      else {
+        editor.select([item.id]);
+        deps.refresh();
+      }
+    });
+    strip.appendChild(chip);
+  });
+  if (media.length > 4) {
+    const warn = document.createElement('div');
+    warn.className = 'reference-warn';
+    warn.textContent = `接了 ${media.length} 个参考，只取前 4 个。`;
+    strip.appendChild(warn);
+  }
+  return strip;
+}
+
+function renderVideo(host: HTMLElement, node: VideoNode, deps: InspectorDeps): void {
+  const { editor } = deps;
+  const section = sectionBase('video', node);
+  section.appendChild(titleField(node, deps));
+
+  const note = document.createElement('p');
+  note.className = 'panel-note';
+  note.dataset.nodeNote = node.id;
+  note.textContent = '提示词与运镜在画布底部输入区编辑；上游文本会自动拼接。参考图/视频通过左侧接口连入。';
+  section.appendChild(note);
+
+  const effective = document.createElement('div');
+  effective.className = 'effective-prompt';
+  const prompt = editor.effectivePrompt(node.id);
+  effective.innerHTML = `<div class="eyebrow">EFFECTIVE PROMPT</div><p>${escape(prompt || '还没有可用的提示词')}</p>`;
+  section.appendChild(effective);
+
+  const aspectGrid = document.createElement('div');
+  aspectGrid.className = 'aspect-grid';
+  ASPECT_LIST.filter((aspect) => aspect.id === '16:9' || aspect.id === '9:16' || aspect.id === '1:1').forEach((aspect) => {
+    const button = document.createElement('button');
+    button.className = node.aspect === aspect.id ? 'active' : '';
+    button.innerHTML = `<span class="aspect-shape" style="aspect-ratio:${aspect.w}/${aspect.h}"></span><span>${aspect.label}</span>`;
+    button.addEventListener('click', () => {
+      editor.updateNode(node.id, { aspect: aspect.id }, true);
+      deps.refresh();
+    });
+    aspectGrid.appendChild(button);
+  });
+  section.appendChild(fieldLabel('画幅', aspectGrid));
+
+  const row = document.createElement('div');
+  row.className = 'inline-fields';
+  row.append(
+    numberField('时长（秒）', node.seconds, 2, 12, (value) => {
+      editor.updateNode(node.id, { seconds: value }, true);
+      deps.refresh();
+    }),
+    numberField('种子', node.seed ?? 0, 0, 99999999, (value) => {
+      editor.updateNode(node.id, { seed: value || null }, true);
+    }),
+  );
+  section.appendChild(row);
+
+  section.appendChild(fieldLabel('参考', referenceStrip(node, deps), '最多 4 个'));
+
+  const thumbs = document.createElement('div');
+  thumbs.className = 'render-thumbs';
+  if (!node.assetIds.length) {
+    thumbs.innerHTML = '<div class="thumb-empty">还没有视频</div>';
+  } else {
+    node.assetIds.forEach((assetId) => {
+      const url = getAssetUrl(assetId);
+      const wrap = document.createElement('div');
+      wrap.className = 'render-thumb-wrap';
+      const button = document.createElement('button');
+      button.className = 'render-thumb';
+      button.title = '查看视频';
+      button.innerHTML = `${url ? `<video src="${url}" muted playsinline preload="metadata"></video>` : ''}<span class="video-play">▶</span>`;
+      button.addEventListener('click', () => deps.openImage(assetId));
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'thumb-remove';
+      remove.title = '从节点移除（素材仍在素材库）';
+      remove.innerHTML = icon('trash', 12);
+      remove.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        deps.removeOutput(node.id, assetId);
+      });
+      wrap.append(button, remove);
+      thumbs.appendChild(wrap);
+    });
+  }
+  section.appendChild(fieldLabel(`视频 · ${node.assetIds.length}`, thumbs));
+
+  const actions = document.createElement('div');
+  actions.className = 'run-row';
+  if (node.status === 'running') {
+    const stop = document.createElement('button');
+    stop.className = 'btn wide danger';
+    stop.innerHTML = `${icon('close', 15)} 停下（${node.progress}%）`;
+    stop.addEventListener('click', () => deps.stop(node.id));
+    actions.appendChild(stop);
+  } else {
+    const run = document.createElement('button');
+    run.className = 'btn primary wide';
+    run.innerHTML = `${icon('play', 15)} ${node.status === 'done' ? '再生成一次' : '生成视频'}`;
+    run.addEventListener('click', () => deps.run(node.id));
+    actions.appendChild(run);
+  }
+  section.appendChild(actions);
+  if (node.error) {
+    const error = document.createElement('div');
+    error.className = 'inline-error';
+    error.textContent = node.error;
+    section.appendChild(error);
+  }
+  host.appendChild(section);
+}
+
+function renderClip(host: HTMLElement, node: ClipNode, deps: InspectorDeps): void {
+  const { editor } = deps;
+  const section = sectionBase('clip', node);
+  section.appendChild(titleField(node, deps));
+
+  const preview = document.createElement('div');
+  preview.className = 'inspector-preview';
+  const url = getAssetUrl(node.assetId);
+  if (url) {
+    preview.innerHTML = `<video src="${url}" controls playsinline preload="metadata"></video>`;
+  } else {
+    preview.innerHTML = '<span>还没有视频</span>';
+  }
+  section.appendChild(preview);
+
+  const actions = document.createElement('div');
+  actions.className = 'inline-fields stretch';
+  const replace = document.createElement('button');
+  replace.className = 'btn';
+  replace.innerHTML = `${icon('upload', 14)} 替换视频`;
+  replace.addEventListener('click', () => deps.pickVideo(node.id));
+  const library = document.createElement('button');
+  library.className = 'btn';
+  library.innerHTML = `${icon('folder', 14)} 素材库`;
+  library.addEventListener('click', () => deps.pickFromLibrary(node.id));
+  actions.append(replace, library);
+  if (node.assetId) {
+    const remove = document.createElement('button');
+    remove.className = 'btn danger';
+    remove.innerHTML = `${icon('trash', 14)} 移除`;
+    remove.addEventListener('click', () => deps.removeOutput(node.id));
+    actions.appendChild(remove);
+  }
+  section.appendChild(actions);
+
+  const caption = textInput(node.caption, '给这段视频一个名字…', (value) => {
+    editor.updateNode(node.id, { caption: value });
+  });
+  section.appendChild(fieldLabel('说明', caption));
+  const meta = getAssetMeta(node.assetId);
+  if (meta) {
+    const info = document.createElement('p');
+    info.className = 'panel-note mono';
+    info.textContent = `${meta.width}×${meta.height} · ${formatBytes(meta.size)}${meta.duration ? ` · ${meta.duration.toFixed(1)}s` : ''}`;
+    section.appendChild(info);
   }
   host.appendChild(section);
 }
@@ -563,7 +756,7 @@ function sectionBase(kind: SceneNode['kind'], node: SceneNode): HTMLElement {
   section.className = `panel-section node-panel kind-${kind}`;
   const eyebrow = document.createElement('div');
   eyebrow.className = 'eyebrow';
-  const kindName: Record<SceneNode['kind'], string> = { prompt: 'TEXT', render: 'GENERATE', image: 'IMAGE', weave: 'COLLAGE' };
+  const kindName: Record<SceneNode['kind'], string> = { prompt: 'TEXT', render: 'GENERATE', image: 'IMAGE', weave: 'COLLAGE', video: 'VIDEO', clip: 'CLIP' };
   eyebrow.innerHTML = `<span class="eyebrow-dot" style="background:${kindColor(kind)}"></span>${NODE_LABEL[kind]} / ${kindName[kind]}`;
   section.appendChild(eyebrow);
   return section;
@@ -634,7 +827,17 @@ function numberField(
 }
 
 function kindColor(kind: SceneNode['kind']): string {
-  return kind === 'prompt' ? '#ffb184' : kind === 'render' ? '#9bbf45' : kind === 'image' ? '#a7b9ff' : '#d08a8a';
+  return kind === 'prompt'
+    ? '#ffb184'
+    : kind === 'render'
+      ? '#9bbf45'
+      : kind === 'image'
+        ? '#a7b9ff'
+        : kind === 'video'
+          ? '#d8b4fe'
+          : kind === 'clip'
+            ? '#8ef0c8'
+            : '#d08a8a';
 }
 
 function escape(value: string): string {

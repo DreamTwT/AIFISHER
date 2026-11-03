@@ -128,7 +128,7 @@ export function buildContactSheet(editor: Editor, assets: AssetMeta[]): HTMLCanv
 }
 
 export async function openContactSheet(editor: Editor): Promise<void> {
-  const assets = allAssets();
+  const assets = allAssets().filter((asset) => (asset.kind ?? 'image') === 'image');
   const canvas = buildContactSheet(editor, assets);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
   if (!blob) {
