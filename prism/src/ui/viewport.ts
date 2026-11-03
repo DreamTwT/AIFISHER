@@ -1,11 +1,13 @@
 import type { Editor } from '../core/editor';
 import { addAsset, getAssetImage, subscribeAssets } from '../core/assets';
 import {
+  contentBounds,
   edgeAt,
   fitCamera,
   groupBounds,
   groupTitleAt,
   nodeAt,
+  nodeRect,
   normalizedRect,
   canLink,
   portPoint,
@@ -13,7 +15,9 @@ import {
   rectContainsNode,
   screenToWorld,
   snapPoint,
+  snapRect,
   wouldCycle,
+  type SnapGuides,
 } from '../core/geometry';
 import { paintScene, type ConnectPreview } from '../core/paint';
 import type { Group, ID, Point, Rect, SceneNode } from '../core/types';
@@ -53,6 +57,9 @@ export class Viewport {
   private inline: HTMLTextAreaElement | null = null;
   private inlineNodeId: ID | null = null;
   private groupEditor: HTMLInputElement | null = null;
+  private guides: SnapGuides | null = null;
+  private alignRect: Rect | null = null;
+  private alignTargets: Rect[] = [];
   private menu: HTMLElement | null = null;
   private disposed = false;
 
@@ -326,6 +333,7 @@ export class Viewport {
       hoverPort: this.hoverPort,
       marquee: this.marquee ?? undefined,
       connect: this.connectPreview ?? undefined,
+      guides: this.guides ?? undefined,
       grid: this.grid,
       pixelRatio: this.dpr,
       getImage: (id) => getAssetImage(id),
@@ -407,8 +415,12 @@ export class Viewport {
       }
       if (!this.editor.selection.has(node.id)) return;
       this.editor.bringToFront();
+      const moving = this.editor.selectedNodes();
       const starts = new Map<ID, Point>();
-      for (const item of this.editor.selectedNodes()) starts.set(item.id, { x: item.x, y: item.y });
+      for (const item of moving) starts.set(item.id, { x: item.x, y: item.y });
+      const movingIds = new Set(moving.map((item) => item.id));
+      this.alignRect = contentBounds(moving);
+      this.alignTargets = this.editor.doc.nodes.filter((item) => !movingIds.has(item.id)).map(nodeRect);
       this.editor.begin();
       this.mode = { type: 'drag', start: world, nodes: starts, moved: false };
       return;
@@ -473,11 +485,25 @@ export class Viewport {
       const dy = world.y - this.mode.start.y;
       if (!this.mode.moved && Math.hypot(dx, dy) * this.editor.project.camera.z <= 2) return;
       this.mode.moved = true;
+      let shiftX = dx;
+      let shiftY = dy;
+      if (this.alignRect && !event.metaKey && !event.ctrlKey) {
+        const snap = snapRect(
+          { x: this.alignRect.x + dx, y: this.alignRect.y + dy, w: this.alignRect.w, h: this.alignRect.h },
+          this.alignTargets,
+          7 / this.editor.project.camera.z,
+        );
+        shiftX += snap.dx;
+        shiftY += snap.dy;
+        this.guides = snap.guides.x.length || snap.guides.y.length ? snap.guides : null;
+      } else {
+        this.guides = null;
+      }
       for (const [id, start] of this.mode.nodes) {
         const node = this.editor.node(id);
         if (!node) continue;
-        node.x = start.x + dx;
-        node.y = start.y + dy;
+        node.x = start.x + shiftX;
+        node.y = start.y + shiftY;
       }
       this.editor.dirty = true;
       this.request();
@@ -528,6 +554,10 @@ export class Viewport {
     const mode = this.mode;
     this.mode = null;
     this.canvas.classList.remove('panning');
+    this.guides = null;
+    this.alignRect = null;
+    this.alignTargets = [];
+    this.request();
 
     if (!mode) return;
     const point = this.screenPoint(event);

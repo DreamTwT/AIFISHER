@@ -26,6 +26,8 @@ export class Editor {
   private undoStack: Doc[] = [];
   private redoStack: Doc[] = [];
   private transaction: Doc | null = null;
+  private nudgeAt = 0;
+  private nudgeKey = '';
 
   constructor(project?: Project) {
     this.project = project ?? starterProject();
@@ -282,6 +284,8 @@ export class Editor {
     this.project.doc = previous;
     this.pruneSelection();
     this.dirty = true;
+    this.nudgeAt = 0;
+    this.nudgeKey = '';
     this.emit();
     return true;
   }
@@ -293,6 +297,8 @@ export class Editor {
     this.project.doc = next;
     this.pruneSelection();
     this.dirty = true;
+    this.nudgeAt = 0;
+    this.nudgeKey = '';
     this.emit();
     return true;
   }
@@ -348,6 +354,30 @@ export class Editor {
     }
     if (changed) this.commit(before);
     return changed;
+  }
+
+  /** 方向键微调：连续按键合并成一次撤销。 */
+  nudgeSelection(dx: number, dy: number): boolean {
+    if (!this.selection.size || (!dx && !dy)) return false;
+    const now = Date.now();
+    const key = [...this.selection].sort().join('|');
+    const merge = key === this.nudgeKey && now - this.nudgeAt < 700;
+    const before = deepClone(this.doc);
+    for (const node of this.selectedNodes()) {
+      node.x += dx;
+      node.y += dy;
+    }
+    this.project.updatedAt = now;
+    this.dirty = true;
+    if (merge) {
+      this.redoStack = [];
+      this.emit();
+    } else {
+      this.commit(before);
+    }
+    this.nudgeAt = now;
+    this.nudgeKey = key;
+    return true;
   }
 
   /** 从某个节点上摘掉生成结果；素材本身仍留在素材库。 */
@@ -510,6 +540,8 @@ export class Editor {
     this.project.updatedAt = Date.now();
     this.dirty = true;
     this.transaction = null;
+    this.nudgeAt = 0;
+    this.nudgeKey = '';
     this.emit();
   }
 

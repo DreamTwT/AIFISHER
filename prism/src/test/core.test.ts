@@ -10,6 +10,7 @@ import {
   pointInNode,
   portVisible,
   rectContainsNode,
+  snapRect,
   wouldCycle,
 } from '../core/geometry';
 import { sanitizeDoc, sanitizeProjectFile } from '../core/schema';
@@ -244,6 +245,36 @@ describe('prism graph core', () => {
     const top = -200 * camera.z + camera.y;
     expect(left).toBeGreaterThanOrEqual(0);
     expect(top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('snaps a dragged rect to neighbouring edges and centers', () => {
+    const other = { x: 100, y: 0, w: 200, h: 100 };
+    const edge = snapRect({ x: 95, y: 300, w: 100, h: 100 }, [other], 7);
+    expect(edge.dx).toBe(5);
+    expect(edge.guides.x).toContain(100);
+    expect(edge.dy).toBe(0);
+
+    const center = snapRect({ x: 145, y: 300, w: 100, h: 100 }, [other], 7);
+    expect(center.dx).toBe(5);
+    expect(center.guides.x).toContain(200);
+
+    const free = snapRect({ x: 400, y: 300, w: 100, h: 100 }, [other], 7);
+    expect(free.dx).toBe(0);
+    expect(free.guides.x).toHaveLength(0);
+  });
+
+  it('nudges the selection and merges repeated arrow presses', () => {
+    const editor = new Editor(starterProject());
+    const node = editor.doc.nodes[0];
+    const start = node.x;
+    editor.select([node.id]);
+    editor.nudgeSelection(1, 0);
+    editor.nudgeSelection(1, 0);
+    editor.nudgeSelection(0, 10);
+    expect(editor.node(node.id)?.x).toBe(start + 2);
+    expect(editor.node(node.id)?.y).toBe(node.y);
+    expect(editor.undo()).toBe(true);
+    expect(editor.node(node.id)?.x).toBe(start);
   });
 
   it('computes aspect sizes consistently', () => {

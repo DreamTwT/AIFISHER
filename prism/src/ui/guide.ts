@@ -59,6 +59,7 @@ export function openGuide(): void {
           <p>在空白处拖出选框：只有完全落在框内的节点才会被选中，擦到边缘不会误选。普通点击只选中一个节点；点击编组顶部标题带，或按住 <kbd>Alt</kbd> 点击组内节点，才会选中整组。</p>
           <p>双击编组标题可以直接改名，也可以在标题上右键选择“重命名编组”。选中整组后，拖动、复制、删除都按整组处理。</p>
           <p>选中两个以上节点，按 <kbd>⌘G</kbd> 编组，<kbd>⇧⌘G</kbd> 解散。编组会画出虚线框，拖动、复制、删除都作为一组处理；它不会改变连线，也不参与提示词合成。多选检查器里可以直接改组名。</p>
+          <p>拖动节点或整组时，边缘与中心会在 7px 内吸附到其他节点的边缘与中心，并出现青色参考线；按住 <kbd>⌘/Ctrl</kbd> 拖动可临时关闭吸附。方向键微调 1px，<kbd>⇧</kbd> + 方向键微调 10px。</p>
         </section>
 
         <section>
@@ -92,6 +93,7 @@ export function openGuide(): void {
             <div><kbd>⌘G / ⇧⌘G</kbd><span>编组 / 解散编组</span></div>
             <div><kbd>Alt + 点击</kbd><span>选中整组</span></div>
             <div><kbd>双击组标题</kbd><span>重命名编组</span></div>
+            <div><kbd>方向键 / ⇧ + 方向键</kbd><span>微调 1px / 10px</span></div>
             <div><kbd>R</kbd><span>生成选中的节点</span></div>
             <div><kbd>⌘↵</kbd><span>生成全部</span></div>
             <div><kbd>F</kbd><span>适应画面</span></div>

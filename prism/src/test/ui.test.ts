@@ -22,7 +22,7 @@ vi.mock('../core/assets', () => {
   };
 });
 import { Editor } from '../core/editor';
-import { starterProject } from '../core/factory';
+import { createNode, createProject, starterProject } from '../core/factory';
 import { groupBounds } from '../core/geometry';
 import type { ID, SceneNode } from '../core/types';
 import { openAssetDetail, openLibrary } from '../ui/library';
@@ -113,6 +113,26 @@ describe('canvas pointer behaviour', () => {
     clickNode(viewport.canvas, first, { altKey: true });
     expect(editor.selection.size).toBe(group.nodeIds.length);
     expect(editor.selectionGroup()?.id).toBe(group.id);
+  });
+
+  it('snaps a dragged node to a neighbouring edge', () => {
+    const project = createProject();
+    const a = createNode('prompt', 0, 0);
+    const b = createNode('prompt', 100, 400);
+    project.doc.nodes = [a, b];
+    const { viewport, editor } = mountViewport(project);
+    const x = a.w / 2;
+    const y = a.h / 2;
+    fire(viewport.canvas, 'pointerdown', { clientX: x, clientY: y, button: 0 });
+    fire(viewport.canvas, 'pointermove', { clientX: x + 95, clientY: y + 40, button: 0 });
+    expect(editor.node(a.id)?.x).toBe(100);
+    expect(editor.node(a.id)?.y).toBe(40);
+    fire(viewport.canvas, 'pointerup', { clientX: x + 95, clientY: y + 40, button: 0 });
+
+    fire(viewport.canvas, 'pointerdown', { clientX: x + 100, clientY: y + 40, button: 0 });
+    fire(viewport.canvas, 'pointermove', { clientX: x + 195, clientY: y + 80, button: 0, metaKey: true });
+    expect(editor.node(a.id)?.x).toBe(195);
+    fire(viewport.canvas, 'pointerup', { clientX: x + 195, clientY: y + 80, button: 0 });
   });
 
   it('renames a group from its title on the canvas', () => {

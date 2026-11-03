@@ -1,6 +1,6 @@
 import type { Camera, Doc, Group, ID, Point, Rect, SceneNode, Thread } from './types';
 import { NODE_LABEL } from './types';
-import { edgeCurve, edgePath, groupBounds, nodeRect, portPoint, portVisible } from './geometry';
+import { edgeCurve, edgePath, groupBounds, nodeRect, portPoint, portVisible, type SnapGuides } from './geometry';
 
 export const KIND_COLOR: Record<SceneNode['kind'], string> = {
   prompt: '#ffb184',
@@ -34,6 +34,8 @@ export interface PaintOptions {
   hoverPort?: 'in' | 'out';
   marquee?: Rect;
   connect?: ConnectPreview;
+  /** 拖动吸附时的参考线（世界坐标） */
+  guides?: SnapGuides;
   grid?: boolean;
   getImage: (assetId: ID | undefined) => HTMLImageElement | undefined;
   /** 屏幕画布用 devicePixelRatio，导出画布保持 1 */
@@ -74,6 +76,10 @@ export function paintScene(ctx: Ctx, options: PaintOptions): void {
 
   for (const node of doc.nodes) drawNode(ctx, node, options, camera.z);
 
+  if (options.guides && (options.guides.x.length || options.guides.y.length)) {
+    drawGuides(ctx, options.guides, camera, width, height);
+  }
+
   if (options.connect) {
     const from = map.get(options.connect.from);
     if (from) {
@@ -102,6 +108,32 @@ export function paintScene(ctx: Ctx, options: PaintOptions): void {
     ctx.strokeRect(options.marquee.x, options.marquee.y, options.marquee.w, options.marquee.h);
   }
 
+  ctx.restore();
+}
+
+function drawGuides(ctx: Ctx, guides: SnapGuides, camera: Camera, width: number, height: number): void {
+  const zoom = camera.z;
+  const left = -camera.x / zoom - 40;
+  const top = -camera.y / zoom - 40;
+  const right = left + width / zoom + 80;
+  const bottom = top + height / zoom + 80;
+  ctx.save();
+  ctx.strokeStyle = '#6fe3ff';
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 1 / zoom;
+  ctx.setLineDash([5 / zoom, 5 / zoom]);
+  ctx.beginPath();
+  for (const x of guides.x) {
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+  }
+  for (const y of guides.y) {
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 

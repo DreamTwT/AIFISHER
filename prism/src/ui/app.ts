@@ -458,6 +458,19 @@ class App {
       void this.exportProject();
       return;
     }
+    const arrow: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    const step = arrow[event.key];
+    if (step && this.editor.selection.size) {
+      event.preventDefault();
+      const amount = event.shiftKey ? 10 : 1;
+      this.editor.nudgeSelection(step[0] * amount, step[1] * amount);
+      return;
+    }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.editor.selection.size || this.editor.threadSelection.size) {
         event.preventDefault();

@@ -173,6 +173,67 @@ export function edgeAt(doc: Doc, point: Point, threshold: number): Thread | unde
   return undefined;
 }
 
+export interface SnapGuides {
+  x: number[];
+  y: number[];
+}
+
+export interface SnapResult {
+  dx: number;
+  dy: number;
+  guides: SnapGuides;
+}
+
+function axisTargets(rects: Rect[], axis: 'x' | 'y'): number[] {
+  const values: number[] = [];
+  for (const rect of rects) {
+    const start = axis === 'x' ? rect.x : rect.y;
+    const size = axis === 'x' ? rect.w : rect.h;
+    values.push(start, start + size / 2, start + size);
+  }
+  return values;
+}
+
+function axisEdges(rect: Rect, axis: 'x' | 'y'): number[] {
+  return axisTargets([rect], axis);
+}
+
+function nearestDelta(edges: number[], targets: number[], threshold: number): number {
+  let best: number | null = null;
+  for (const edge of edges) {
+    for (const target of targets) {
+      const delta = target - edge;
+      if (Math.abs(delta) <= threshold && (best === null || Math.abs(delta) < Math.abs(best))) best = delta;
+    }
+  }
+  return best ?? 0;
+}
+
+/**
+ * 拖动时的对齐吸附：把移动框的左/中/右、上/中/下，吸到其他节点的同名位置。
+ * 单位与节点坐标一致；threshold 由调用方按缩放换算成世界坐标。
+ */
+export function snapRect(moving: Rect, others: Rect[], threshold: number): SnapResult {
+  if (!others.length || threshold <= 0) return { dx: 0, dy: 0, guides: { x: [], y: [] } };
+  const targetsX = axisTargets(others, 'x');
+  const targetsY = axisTargets(others, 'y');
+  const dx = nearestDelta(axisEdges(moving, 'x'), targetsX, threshold);
+  const dy = nearestDelta(axisEdges(moving, 'y'), targetsY, threshold);
+  const guideX = new Set<number>();
+  const guideY = new Set<number>();
+  for (const edge of axisEdges(moving, 'x')) {
+    for (const target of targetsX) {
+      if (Math.abs(target - (edge + dx)) < 0.01) guideX.add(target);
+    }
+  }
+  for (const edge of axisEdges(moving, 'y')) {
+    for (const target of targetsY) {
+      if (Math.abs(target - (edge + dy)) < 0.01) guideY.add(target);
+    }
+  }
+  return { dx, dy, guides: { x: [...guideX], y: [...guideY] } };
+}
+
 export function contentBounds(nodes: SceneNode[]): Rect {
   if (!nodes.length) return { x: -300, y: -200, w: 600, h: 400 };
   let minX = Infinity;
