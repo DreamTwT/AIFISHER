@@ -10,6 +10,7 @@ export interface InspectorDeps {
   run: (nodeId: ID) => void;
   stop: (nodeId: ID) => void;
   openImage: (assetId: ID) => void;
+  removeOutput: (nodeId: ID, assetId?: ID) => void;
   pickImage: (nodeId: ID) => void;
   pickFromLibrary: (nodeId: ID) => void;
   exportWeave: (nodeId: ID) => void;
@@ -203,14 +204,28 @@ function renderRender(host: HTMLElement, node: RenderNode, deps: InspectorDeps):
     thumbs.innerHTML = '<div class="thumb-empty">还没有结果</div>';
   } else {
     node.assetIds.forEach((assetId, index) => {
-      const meta = getAssetMeta(assetId);
       const url = getAssetUrl(assetId);
+      const wrap = document.createElement('div');
+      wrap.className = 'render-thumb-wrap';
       const button = document.createElement('button');
       button.className = 'render-thumb';
       button.title = '查看图片';
       button.innerHTML = `${url ? `<img alt="" src="${url}" />` : ''}<span>${String(index + 1).padStart(2, '0')}</span>`;
       button.addEventListener('click', () => deps.openImage(assetId));
-      thumbs.appendChild(button);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'thumb-remove';
+      remove.title = '从节点移除（素材仍在素材库）';
+      remove.setAttribute('aria-label', '从节点移除');
+      remove.innerHTML = icon('trash', 12);
+      const drop = (event: Event): void => {
+        event.preventDefault();
+        event.stopPropagation();
+        deps.removeOutput(node.id, assetId);
+      };
+      remove.addEventListener('click', drop);
+      wrap.append(button, remove);
+      thumbs.appendChild(wrap);
     });
   }
   section.appendChild(fieldLabel(`图片 · ${node.assetIds.length}`, thumbs));
@@ -268,6 +283,13 @@ function renderImage(host: HTMLElement, node: ImageNode, deps: InspectorDeps): v
   library.innerHTML = `${icon('folder', 14)} 素材库`;
   library.addEventListener('click', () => deps.pickFromLibrary(node.id));
   actions.append(replace, library);
+  if (node.assetId) {
+    const remove = document.createElement('button');
+    remove.className = 'btn danger';
+    remove.innerHTML = `${icon('trash', 14)} 移除`;
+    remove.addEventListener('click', () => deps.removeOutput(node.id));
+    actions.appendChild(remove);
+  }
   section.appendChild(actions);
 
   const caption = textInput(node.caption, '给这张图片一个名字…', (value) => {
@@ -462,7 +484,7 @@ function groupCard(group: Group, deps: InspectorDeps, compact: boolean): HTMLEle
 
   const note = document.createElement('p');
   note.className = 'panel-note';
-  note.textContent = `与另外 ${Math.max(0, group.nodeIds.length - 1)} 个节点同组。拖动、复制、删除会作为一组处理；按住 Alt 点击可只选其中一个。`;
+  note.textContent = `与另外 ${Math.max(0, group.nodeIds.length - 1)} 个节点同组。普通点击只选一个；点顶部标题带或 Alt + 点击选中整组，按住 Shift 可加选。双击标题可直接改名。`;
   card.appendChild(note);
 
   const row = document.createElement('div');

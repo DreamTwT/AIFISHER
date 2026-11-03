@@ -55,21 +55,53 @@ describe('prism graph core', () => {
     expect(editor.doc.threads).toHaveLength(before);
   });
 
-  it('selects a whole group, while deep selection enters it', () => {
+  it('selects one node on click and the whole group only when asked', () => {
     const project = starterProject();
     const group = project.doc.groups[0];
     const editor = new Editor(project);
     editor.select([group.nodeIds[0]]);
-    expect([...editor.selection].sort()).toEqual([...group.nodeIds].sort());
-    editor.select([group.nodeIds[0]], false, true);
     expect(editor.selection.size).toBe(1);
+    expect(editor.selection.has(group.nodeIds[0])).toBe(true);
+    editor.select(group.nodeIds);
+    expect(editor.selection.size).toBe(group.nodeIds.length);
+    expect(editor.selectionGroup()?.id).toBe(group.id);
+  });
+
+  it('drops generated images from a node while the library keeps them', () => {
+    const editor = new Editor(starterProject());
+    const render = editor.doc.nodes.find((node) => node.kind === 'render');
+    expect(render?.kind).toBe('render');
+    if (render?.kind !== 'render') return;
+    render.assetIds = ['asset-a', 'asset-b'];
+    render.status = 'done';
+    expect(editor.removeNodeOutput(render.id, 'asset-a')).toBe(true);
+    expect(render.assetIds).toEqual(['asset-b']);
+    expect(editor.removeNodeOutput(render.id)).toBe(true);
+    expect(render.assetIds).toEqual([]);
+    expect(render.status).toBe('idle');
+    expect(editor.undo()).toBe(true);
+    const restored = editor.node(render.id);
+    expect(restored?.kind === 'render' ? restored.assetIds : []).toEqual(['asset-b']);
+  });
+
+  it('clears every canvas reference when an asset is deleted', () => {
+    const editor = new Editor(starterProject());
+    const render = editor.doc.nodes.find((node) => node.kind === 'render');
+    const image = createNode('image', 0, 0);
+    editor.doc.nodes.push(image);
+    if (render?.kind === 'render') render.assetIds = ['gone', 'kept'];
+    if (image.kind === 'image') image.assetId = 'gone';
+    expect(editor.removeAssetReferences('gone')).toBe(true);
+    if (render?.kind === 'render') expect(render.assetIds).toEqual(['kept']);
+    if (image.kind === 'image') expect(image.assetId).toBeUndefined();
+    expect(editor.removeAssetReferences('gone')).toBe(false);
   });
 
   it('groups, renames, duplicates and ungroups with undo', () => {
     const editor = new Editor(starterProject());
     const prompts = editor.doc.nodes.filter((node) => node.kind === 'prompt');
-    editor.select([prompts[0].id], false, true);
-    editor.select([prompts[1].id], true, true);
+    editor.select([prompts[0].id]);
+    editor.select([prompts[1].id], true);
     const group = editor.groupSelection('新的组');
     expect(group?.nodeIds).toHaveLength(2);
     editor.renameGroup(group!.id, '改过的组');
@@ -77,7 +109,7 @@ describe('prism graph core', () => {
     editor.duplicateSelection();
     expect(editor.doc.groups.some((item) => item.name === '改过的组 副本')).toBe(true);
     editor.undo();
-    editor.select([prompts[0].id, prompts[1].id], false, true);
+    editor.select([prompts[0].id, prompts[1].id]);
     expect(editor.ungroupSelection()).toBe(true);
     expect(editor.selectionGroup()).toBeUndefined();
     editor.undo();

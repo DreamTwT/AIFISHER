@@ -7,6 +7,7 @@ import { showToast } from './toast';
 
 export interface LibraryOptions {
   onUse: (assetId: ID) => void;
+  onDelete?: (assetId: ID) => boolean | Promise<boolean>;
 }
 
 export function openLibrary(options: LibraryOptions): void {
@@ -55,8 +56,10 @@ export function openLibrary(options: LibraryOptions): void {
   };
 
   const card = (asset: AssetMeta): HTMLElement => {
-    const item = document.createElement('button');
+    const item = document.createElement('div');
     item.className = 'asset-card';
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
     const url = getAssetUrl(asset.id);
     item.innerHTML = `
       <div class="asset-thumb">${url ? `<img alt="" src="${url}" loading="lazy" />` : '<span>NO PREVIEW</span>'}</div>
@@ -65,11 +68,25 @@ export function openLibrary(options: LibraryOptions): void {
         <span>${asset.width}×${asset.height} · ${formatBytes(asset.size)}</span>
         <span class="asset-when">${formatWhen(asset.createdAt)}${asset.seed ? ` · S${asset.seed}` : ''}</span>
       </div>
-      <span class="asset-use">放入画布 ${icon('arrow', 13)}</span>`;
+      <span class="asset-use">放入画布 ${icon('arrow', 13)}</span>
+      <button type="button" class="asset-delete" title="删除素材" aria-label="删除素材">${icon('trash', 13)}</button>`;
     item.addEventListener('click', () => {
       options.onUse(asset.id);
       close();
       showToast('图片已放入画布', 'success');
+    });
+    item.addEventListener('keydown', (event) => {
+      if (event.target !== item) return;
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        item.click();
+      }
+    });
+    const remove = item.querySelector<HTMLButtonElement>('.asset-delete')!;
+    remove.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await options.onDelete?.(asset.id);
     });
     return item;
   };
@@ -108,6 +125,7 @@ export function openLibrary(options: LibraryOptions): void {
 
 export interface AssetDetailOptions {
   onUse?: (assetId: ID) => void;
+  onDelete?: (assetId: ID) => boolean | Promise<boolean>;
 }
 
 export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = {}): void {
@@ -131,6 +149,7 @@ export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = 
         <div class="detail-actions">
           ${options.onUse ? `<button class="btn primary" data-act="use">${icon('plus', 15)} 放入画布</button>` : ''}
           ${asset.prompt ? `<button class="btn" data-act="copy">复制提示词</button>` : ''}
+          ${options.onDelete ? `<button class="btn danger" data-act="delete">${icon('trash', 15)} 删除素材</button>` : ''}
         </div>
       </aside>
     </div>`;
@@ -143,6 +162,10 @@ export function openAssetDetail(asset: AssetMeta, options: AssetDetailOptions = 
   backdrop.querySelector('[data-act="use"]')?.addEventListener('click', () => {
     options.onUse?.(asset.id);
     close();
+  });
+  backdrop.querySelector('[data-act="delete"]')?.addEventListener('click', async () => {
+    const removed = await options.onDelete?.(asset.id);
+    if (removed) close();
   });
   backdrop.querySelector('[data-act="copy"]')?.addEventListener('click', async () => {
     try {

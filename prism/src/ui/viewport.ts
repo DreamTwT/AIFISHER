@@ -3,6 +3,7 @@ import { addAsset, getAssetImage, subscribeAssets } from '../core/assets';
 import {
   edgeAt,
   fitCamera,
+  groupBounds,
   groupTitleAt,
   nodeAt,
   normalizedRect,
@@ -15,7 +16,7 @@ import {
   wouldCycle,
 } from '../core/geometry';
 import { paintScene, type ConnectPreview } from '../core/paint';
-import type { ID, Point, Rect, SceneNode } from '../core/types';
+import type { Group, ID, Point, Rect, SceneNode } from '../core/types';
 import { clamp, isTextTarget } from '../core/util';
 
 type Mode =
@@ -51,6 +52,7 @@ export class Viewport {
   private grid = true;
   private inline: HTMLTextAreaElement | null = null;
   private inlineNodeId: ID | null = null;
+  private groupEditor: HTMLInputElement | null = null;
   private menu: HTMLElement | null = null;
   private disposed = false;
 
@@ -95,6 +97,7 @@ export class Viewport {
   dispose(): void {
     this.disposed = true;
     this.closeInline();
+    this.closeGroupRename();
     this.closeMenu();
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('resize', this.onWindowResize);
@@ -235,6 +238,57 @@ export class Viewport {
     }, 20);
   }
 
+  private beginGroupRename(group: Group): void {
+    this.closeGroupRename();
+    const bounds = groupBounds(group, this.editor.doc);
+    if (!bounds) return;
+    const camera = this.editor.project.camera;
+    const screen = this.toScreen({ x: bounds.x, y: bounds.y });
+    const input = document.createElement('input');
+    input.className = 'group-inline-editor';
+    input.value = group.name;
+    input.maxLength = 40;
+    input.style.left = `${screen.x + 8 * camera.z}px`;
+    input.style.top = `${screen.y + 5 * camera.z}px`;
+    input.style.width = `${Math.min(320, Math.max(120, bounds.w * camera.z - 20))}px`;
+    input.style.height = `${Math.max(20, 18 * camera.z + 4)}px`;
+    input.style.fontSize = `${Math.max(9, 10 * camera.z)}px`;
+    this.host.appendChild(input);
+    this.groupEditor = input;
+    let done = false;
+    const finish = (commit: boolean): void => {
+      if (done) return;
+      done = true;
+      const value = input.value;
+      const changed = value.trim() !== group.name;
+      this.closeGroupRename();
+      if (commit && changed) this.editor.renameGroup(group.id, value);
+      this.request();
+    };
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 20);
+  }
+
+  private closeGroupRename(): void {
+    const input = this.groupEditor;
+    if (!input) return;
+    this.groupEditor = null;
+    input.remove();
+  }
+
   closeInline(): void {
     if (!this.inline) return;
     const area = this.inline;
@@ -339,12 +393,16 @@ export class Viewport {
     const node = nodeAt(this.editor.doc, world);
     if (node) {
       if (event.altKey) {
-        // 进入编组：只选这一个节点；Alt+Shift 可跨组加选
-        if (event.shiftKey) this.editor.toggleSelect(node.id, true);
-        else this.editor.select([node.id], false, true);
+        // Alt + 点击：选中整组；Alt + Shift 把整组加进当前选择
+        const group = this.editor.groupFor(node.id);
+        if (group) this.editor.select(group.nodeIds, event.shiftKey);
+        else this.editor.select([node.id]);
       } else if (event.shiftKey) {
         this.editor.toggleSelect(node.id);
-      } else if (!this.editor.selection.has(node.id)) {
+      } else if (
+        this.editor.selection.size !== 1 ||
+        !this.editor.selection.has(node.id)
+      ) {
         this.editor.select([node.id]);
       }
       if (!this.editor.selection.has(node.id)) return;
@@ -541,9 +599,15 @@ export class Viewport {
   private onDoubleClick = (event: MouseEvent): void => {
     const point = this.screenPoint(event);
     const world = this.toWorld(point);
+    const group = groupTitleAt(this.editor.doc, world);
+    if (group) {
+      this.editor.select(group.nodeIds);
+      this.beginGroupRename(group);
+      return;
+    }
     const node = nodeAt(this.editor.doc, world);
     if (node) {
-      this.editor.select([node.id], false, true);
+      this.editor.select([node.id]);
       if (node.kind === 'prompt' || node.kind === 'render') {
         this.hooks.onEditText(node);
       } else if (node.kind === 'image' && node.assetId) {
@@ -561,6 +625,12 @@ export class Viewport {
     event.preventDefault();
     const point = this.screenPoint(event);
     const world = this.toWorld(point);
+    const group = groupTitleAt(this.editor.doc, world);
+    if (group) {
+      this.editor.select(group.nodeIds);
+      this.openGroupMenu(event.clientX, event.clientY, group);
+      return;
+    }
     const node = nodeAt(this.editor.doc, world);
     if (node && !this.editor.selection.has(node.id)) this.editor.select([node.id]);
     this.openMenu(event.clientX, event.clientY, world, node);
@@ -583,7 +653,11 @@ export class Viewport {
       menu.appendChild(button);
     };
     if (node) {
-      if (node.kind === 'render') add('生成图片', 'R', () => window.dispatchEvent(new CustomEvent('prism:run-node', { detail: node.id })));
+      if (node.kind === 'render') {
+        add('生成图片', 'R', () => window.dispatchEvent(new CustomEvent('prism:run-node', { detail: node.id })));
+        if (node.assetIds.length) add('清空生成结果', '素材保留', () => this.editor.removeNodeOutput(node.id));
+      }
+      if (node.kind === 'image' && node.assetId) add('移除图片', '素材保留', () => this.editor.removeNodeOutput(node.id));
       add('复制', '⌘D', () => {
         this.editor.select([node.id]);
         this.editor.duplicateSelection();
@@ -615,6 +689,32 @@ export class Viewport {
     add('新建拼图节点', 'W', () => {
       this.editor.addNode('weave', snapPoint(world).x, snapPoint(world).y);
     });
+    this.host.appendChild(menu);
+    this.menu = menu;
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth - 8) menu.style.left = `${clientX - rect.width}px`;
+    if (rect.bottom > window.innerHeight - 8) menu.style.top = `${clientY - rect.height}px`;
+  }
+
+  private openGroupMenu(clientX: number, clientY: number, group: Group): void {
+    this.closeMenu();
+    const menu = document.createElement('div');
+    menu.className = 'prism-menu';
+    menu.style.left = `${clientX}px`;
+    menu.style.top = `${clientY}px`;
+    const add = (label: string, hint: string, action: () => void) => {
+      const button = document.createElement('button');
+      button.className = 'prism-menu-item';
+      button.innerHTML = `<span>${label}</span><kbd>${hint}</kbd>`;
+      button.addEventListener('click', () => {
+        this.closeMenu();
+        action();
+      });
+      menu.appendChild(button);
+    };
+    add('重命名编组', '双击标题', () => this.beginGroupRename(group));
+    add('选中整组', '⌥ 点击', () => this.editor.select(group.nodeIds));
+    add('解散编组', '⇧⌘G', () => this.editor.ungroupSelection());
     this.host.appendChild(menu);
     this.menu = menu;
     const rect = menu.getBoundingClientRect();

@@ -1,4 +1,4 @@
-import { getAssetRecord, listAssetRecords, putAsset } from './db';
+import { getAssetRecord, listAssetRecords, putAsset, removeAssetRecord } from './db';
 import type { AssetMeta, AssetRecord, ID } from './types';
 import { imageSize, loadImage, uid } from './util';
 
@@ -133,6 +133,16 @@ export async function importAsset(meta: AssetMeta, blob: Blob): Promise<void> {
   const entry: Entry = { meta, blob, url: URL.createObjectURL(blob) };
   entries.set(meta.id, entry);
   attachImage(entry);
+  emit();
+}
+
+export async function removeAsset(id: ID): Promise<void> {
+  await removeAssetRecord(id);
+  const entry = entries.get(id);
+  if (entry) {
+    URL.revokeObjectURL(entry.url);
+    entries.delete(id);
+  }
   emit();
 }
 

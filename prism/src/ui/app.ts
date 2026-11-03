@@ -1,4 +1,4 @@
-import { addAsset, allAssets, assetsVersion, getAssetMeta, getAssetUrl, hydrateAssets, subscribeAssets } from '../core/assets';
+import { addAsset, allAssets, assetsVersion, getAssetMeta, getAssetUrl, hydrateAssets, removeAsset, subscribeAssets } from '../core/assets';
 import { listProjects, putProject, removeProject } from '../core/db';
 import { Editor } from '../core/editor';
 import { contentBounds, rectsOverlap } from '../core/geometry';
@@ -506,7 +506,7 @@ class App {
     const node = this.editor.node(nodeId);
     if (!node || (node.kind !== 'prompt' && node.kind !== 'render')) return;
     this.composerDismissedFor = null;
-    this.editor.select([nodeId], false, true);
+    this.editor.select([nodeId]);
     this.syncComposer();
     window.setTimeout(() => {
       this.composerInput.focus();
@@ -642,6 +642,7 @@ class App {
       run: (nodeId) => void this.runNode(nodeId),
       stop: (nodeId) => this.stopNode(nodeId),
       openImage: (assetId) => this.openAsset(assetId),
+      removeOutput: (nodeId, assetId) => this.removeOutput(nodeId, assetId),
       pickImage: (nodeId) => void this.pickImageFor(nodeId),
       pickFromLibrary: (nodeId) => this.pickFromLibrary(nodeId),
       exportWeave: (nodeId) => void this.exportWeave(nodeId),
@@ -868,6 +869,7 @@ class App {
 
   private openLibrary(): void {
     openLibrary({
+      onDelete: (assetId) => this.deleteAsset(assetId),
       onUse: (assetId) => {
         const camera = this.editor.project.camera;
         const rect = this.stage.getBoundingClientRect();
@@ -896,11 +898,36 @@ class App {
 
   private pickFromLibrary(nodeId: ID): void {
     openLibrary({
+      onDelete: (assetId) => this.deleteAsset(assetId),
       onUse: (assetId) => {
         const meta = getAssetMeta(assetId);
         this.editor.updateNode(nodeId, { assetId, caption: meta?.name ?? '' }, true);
       },
     });
+  }
+
+  private removeOutput(nodeId: ID, assetId?: ID): void {
+    if (this.editor.removeNodeOutput(nodeId, assetId)) {
+      this.syncUI();
+      showToast('已从节点移除，素材仍保留在素材库', 'success');
+    }
+  }
+
+  private async deleteAsset(assetId: ID): Promise<boolean> {
+    const meta = getAssetMeta(assetId);
+    if (!meta) return false;
+    if (!window.confirm(`删除「${meta.name}」？画布中引用它的节点会被一并清空。`)) return false;
+    try {
+      await removeAsset(assetId);
+    } catch (error) {
+      console.warn('[prism] 素材删除失败', error);
+      showToast('删除失败，请重试', 'error');
+      return false;
+    }
+    const cleared = this.editor.removeAssetReferences(assetId);
+    this.syncUI();
+    showToast(cleared ? '素材已删除，画布中的引用已清空' : '素材已删除', 'success');
+    return true;
   }
 
   private openAsset(assetId: ID): void {
@@ -910,6 +937,7 @@ class App {
       return;
     }
     openAssetDetail(meta, {
+      onDelete: (id) => this.deleteAsset(id),
       onUse: (id) => {
         const camera = this.editor.project.camera;
         const rect = this.stage.getBoundingClientRect();

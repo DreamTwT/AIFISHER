@@ -1,0 +1,210 @@
+// @vitest-environment jsdom
+import { beforeAll, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../core/assets', () => {
+  const asset = {
+    id: 'asset-1',
+    name: '测试图',
+    mime: 'image/png',
+    width: 1024,
+    height: 1024,
+    size: 2048,
+    createdAt: 1_700_000_000_000,
+    source: 'upload',
+  };
+  return {
+    allAssets: () => [asset],
+    subscribeAssets: () => () => {},
+    getAssetUrl: () => undefined,
+    getAssetImage: () => undefined,
+    getAssetMeta: (id: string) => (id === 'asset-1' ? asset : undefined),
+    addAsset: async () => asset,
+  };
+});
+import { Editor } from '../core/editor';
+import { starterProject } from '../core/factory';
+import { groupBounds } from '../core/geometry';
+import type { ID, SceneNode } from '../core/types';
+import { openAssetDetail, openLibrary } from '../ui/library';
+import { renderInspector } from '../ui/inspector';
+import { Viewport, type ViewportHooks } from '../ui/viewport';
+
+const ctx = (): CanvasRenderingContext2D =>
+  new Proxy(
+    {},
+    {
+      get(_target, key) {
+        if (key === 'measureText') return () => ({ width: 42 });
+        if (key === 'createRadialGradient' || key === 'createLinearGradient') return () => ({ addColorStop() {} });
+        if (key === 'getImageData') return () => ({ data: [] });
+        return () => undefined;
+      },
+      set: () => true,
+    },
+  ) as unknown as CanvasRenderingContext2D;
+
+beforeAll(() => {
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  };
+  (globalThis as unknown as { Path2D: unknown }).Path2D = class {
+    constructor(_path?: string) {}
+  };
+  globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
+    window.setTimeout(() => cb(0), 0)) as typeof requestAnimationFrame;
+  globalThis.cancelAnimationFrame = ((handle: number) => window.clearTimeout(handle)) as typeof cancelAnimationFrame;
+  HTMLCanvasElement.prototype.getContext = (() => ctx()) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+  const proto = HTMLCanvasElement.prototype as unknown as Record<string, unknown>;
+  proto.setPointerCapture = () => {};
+  proto.releasePointerCapture = () => {};
+  proto.hasPointerCapture = () => true;
+  Element.prototype.scrollIntoView = () => {};
+  window.confirm = () => true;
+});
+
+function mountViewport(project = starterProject()): { viewport: Viewport; editor: Editor; host: HTMLElement } {
+  const editor = new Editor(project);
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const rect = { x: 0, y: 0, left: 0, top: 0, width: 1200, height: 800, right: 1200, bottom: 800, toJSON: () => ({}) };
+  host.getBoundingClientRect = () => rect as DOMRect;
+  const hooks: ViewportHooks = {
+    onChange: () => {},
+    onToast: () => {},
+    onOpenImage: () => {},
+    onPickImage: () => {},
+    onEditText: () => {},
+    onInteractionEnd: () => {},
+  };
+  const viewport = new Viewport(host, editor, hooks);
+  viewport.canvas.getBoundingClientRect = () => rect as DOMRect;
+  return { viewport, editor, host };
+}
+
+function fire(target: HTMLElement, type: string, init: MouseEventInit, pointer = true): void {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+  if (pointer) Object.defineProperty(event, 'pointerId', { value: 1 });
+  target.dispatchEvent(event);
+}
+
+function clickNode(target: HTMLElement, node: SceneNode, init: MouseEventInit = {}): void {
+  const x = node.x + node.w / 2;
+  const y = node.y + node.h / 2;
+  fire(target, 'pointerdown', { ...init, clientX: x, clientY: y, button: 0 });
+  fire(target, 'pointerup', { ...init, clientX: x, clientY: y, button: 0 });
+}
+
+describe('canvas pointer behaviour', () => {
+  it('selects only the clicked node, and the whole group with Alt', () => {
+    const { viewport, editor } = mountViewport();
+    const group = editor.doc.groups[0];
+    const first = editor.node(group.nodeIds[0])!;
+    const second = editor.node(group.nodeIds[1])!;
+
+    clickNode(viewport.canvas, first);
+    expect(editor.selection.size).toBe(1);
+    expect(editor.selection.has(first.id)).toBe(true);
+
+    clickNode(viewport.canvas, second, { shiftKey: true });
+    expect(editor.selection.size).toBe(2);
+
+    clickNode(viewport.canvas, first, { altKey: true });
+    expect(editor.selection.size).toBe(group.nodeIds.length);
+    expect(editor.selectionGroup()?.id).toBe(group.id);
+  });
+
+  it('renames a group from its title on the canvas', () => {
+    const { viewport, editor, host } = mountViewport();
+    const group = editor.doc.groups[0];
+    const bounds = groupBounds(group, editor.doc)!;
+    fire(viewport.canvas, 'dblclick', {
+      clientX: bounds.x + 40,
+      clientY: bounds.y + 12,
+      button: 0,
+    });
+    const input = host.querySelector<HTMLInputElement>('.group-inline-editor');
+    expect(input).not.toBeNull();
+    input!.value = '新的编组名';
+    input!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(editor.doc.groups.find((item) => item.id === group.id)?.name).toBe('新的编组名');
+    expect(host.querySelector('.group-inline-editor')).toBeNull();
+  });
+});
+
+describe('library delete entry', () => {
+  it('deletes a card without placing it on the canvas', () => {
+    const deleted: ID[] = [];
+    let used = 0;
+    openLibrary({ onUse: () => (used += 1), onDelete: (id) => (deleted.push(id), true) });
+    const card = document.querySelector<HTMLElement>('.asset-card');
+    expect(card).not.toBeNull();
+    const remove = card!.querySelector<HTMLElement>('.asset-delete');
+    expect(remove).not.toBeNull();
+    remove!.click();
+    expect(deleted).toEqual(['asset-1']);
+    expect(used).toBe(0);
+    document.querySelector('.library-backdrop')?.remove();
+  });
+
+  it('offers a delete action in the asset detail sheet', () => {
+    let deleted = 0;
+    openAssetDetail(
+      {
+        id: 'asset-1',
+        name: '测试图',
+        mime: 'image/png',
+        width: 1024,
+        height: 1024,
+        size: 1024,
+        createdAt: Date.now(),
+        source: 'upload',
+      },
+      { onDelete: () => ((deleted += 1), true) },
+    );
+    const button = document.querySelector<HTMLElement>('[data-act="delete"]');
+    expect(button?.textContent).toContain('删除素材');
+    button?.click();
+    expect(deleted).toBe(1);
+    document.querySelector('.detail-backdrop')?.remove();
+  });
+});
+
+describe('inspector output removal', () => {
+  it('removes one generated image from the node', () => {
+    const editor = new Editor(starterProject());
+    const render = editor.doc.nodes.find((node) => node.kind === 'render');
+    if (render?.kind !== 'render') throw new Error('missing render node');
+    render.assetIds = ['a', 'b'];
+    render.status = 'done';
+    editor.select([render.id]);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const removed: Array<[ID, ID | undefined]> = [];
+    renderInspector(host, {
+      editor,
+      run: () => {},
+      stop: () => {},
+      openImage: () => {},
+      removeOutput: (nodeId, assetId) => {
+        removed.push([nodeId, assetId]);
+        editor.removeNodeOutput(nodeId, assetId);
+      },
+      pickImage: () => {},
+      pickFromLibrary: () => {},
+      exportWeave: () => {},
+      openLibrary: () => {},
+      openContactSheet: () => {},
+      refresh: () => {},
+      toast: () => {},
+    });
+    const buttons = host.querySelectorAll<HTMLElement>('.thumb-remove');
+    expect(buttons).toHaveLength(2);
+    buttons[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(removed[0]).toEqual([render.id, 'a']);
+    const node = editor.node(render.id);
+    expect(node?.kind === 'render' ? node.assetIds : []).toEqual(['b']);
+    host.remove();
+  });
+});

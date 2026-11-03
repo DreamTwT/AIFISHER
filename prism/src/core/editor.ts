@@ -85,24 +85,19 @@ export class Editor {
     this.emit();
   }
 
-/** 普通点击/框选会带走整个编组；Alt/双击进入组内时传 deep = true。 */
-  select(ids: ID[], additive = false, deep = false): void {
-    const resolved = deep ? ids : this.expandGroupIds(ids);
+/**
+ * 普通点击只选一个节点。要选中整组，传 group.nodeIds，
+ * 或者点击编组顶部的标题带、在检查器里点“选中整组”。
+ */
+  select(ids: ID[], additive = false): void {
     if (!additive) this.selection.clear();
-    resolved.forEach((id) => this.selection.add(id));
-    if (resolved.length) this.threadSelection.clear();
+    ids.forEach((id) => this.selection.add(id));
+    if (ids.length) this.threadSelection.clear();
     this.emit();
   }
 
-  toggleSelect(id: ID, deep = false): void {
-    const group = deep ? undefined : this.groupFor(id);
-    if (group) {
-      const all = group.nodeIds.every((nodeId) => this.selection.has(nodeId));
-      group.nodeIds.forEach((nodeId) => {
-        if (all) this.selection.delete(nodeId);
-        else this.selection.add(nodeId);
-      });
-    } else if (this.selection.has(id)) this.selection.delete(id);
+  toggleSelect(id: ID): void {
+    if (this.selection.has(id)) this.selection.delete(id);
     else this.selection.add(id);
     this.threadSelection.clear();
     this.emit();
@@ -175,15 +170,6 @@ export class Editor {
     this.dirty = true;
     if (before) this.commit(before);
     else this.emit();
-  }
-
-  private expandGroupIds(ids: ID[]): ID[] {
-    const result = new Set(ids);
-    for (const id of ids) {
-      const group = this.groupFor(id);
-      group?.nodeIds.forEach((nodeId) => result.add(nodeId));
-    }
-    return [...result];
   }
 
   private ensureGroups(): void {
@@ -341,6 +327,49 @@ export class Editor {
     this.doc.threads = this.doc.threads.filter((thread) => thread.id !== threadId);
     this.threadSelection.delete(threadId);
     this.commit(before);
+  }
+
+  /** 删除素材后清空节点里对它的引用；素材文件本身由 assets 层移除。 */
+  removeAssetReferences(assetId: ID): boolean {
+    const before = deepClone(this.doc);
+    let changed = false;
+    for (const node of this.doc.nodes) {
+      if (node.kind === 'render' && node.assetIds.includes(assetId)) {
+        node.assetIds = node.assetIds.filter((id) => id !== assetId);
+        if (!node.assetIds.length) {
+          node.status = 'idle';
+          node.progress = 0;
+        }
+        changed = true;
+      } else if (node.kind === 'image' && node.assetId === assetId) {
+        node.assetId = undefined;
+        changed = true;
+      }
+    }
+    if (changed) this.commit(before);
+    return changed;
+  }
+
+  /** 从某个节点上摘掉生成结果；素材本身仍留在素材库。 */
+  removeNodeOutput(nodeId: ID, assetId?: ID): boolean {
+    const node = this.node(nodeId);
+    if (!node) return false;
+    if (node.kind === 'render' && node.status === 'running') return false;
+    const before = deepClone(this.doc);
+    if (node.kind === 'render') {
+      node.assetIds = assetId ? node.assetIds.filter((id) => id !== assetId) : [];
+      if (!node.assetIds.length) {
+        node.status = 'idle';
+        node.progress = 0;
+      }
+    } else if (node.kind === 'image' && (!assetId || node.assetId === assetId)) {
+      node.assetId = undefined;
+      node.caption = '';
+    } else {
+      return false;
+    }
+    this.commit(before);
+    return true;
   }
 
   deleteSelection(): void {

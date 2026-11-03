@@ -56,7 +56,8 @@ export function openGuide(): void {
         <section>
           <span class="guide-no">04</span>
           <h3>框选与编组</h3>
-          <p>在空白处拖出选框：只有完全落在框内的节点才会被选中，擦到边缘不会误选。普通点击编组内的节点会选中整组；按住 <kbd>Alt</kbd> 点击或双击，则进入组内只选一个。</p>
+          <p>在空白处拖出选框：只有完全落在框内的节点才会被选中，擦到边缘不会误选。普通点击只选中一个节点；点击编组顶部标题带，或按住 <kbd>Alt</kbd> 点击组内节点，才会选中整组。</p>
+          <p>双击编组标题可以直接改名，也可以在标题上右键选择“重命名编组”。选中整组后，拖动、复制、删除都按整组处理。</p>
           <p>选中两个以上节点，按 <kbd>⌘G</kbd> 编组，<kbd>⇧⌘G</kbd> 解散。编组会画出虚线框，拖动、复制、删除都作为一组处理；它不会改变连线，也不参与提示词合成。多选检查器里可以直接改组名。</p>
         </section>
 
@@ -69,20 +70,28 @@ export function openGuide(): void {
 
         <section>
           <span class="guide-no">06</span>
+          <h3>删除素材</h3>
+          <p>素材库卡片右上角的删除按钮、图片详情页的“删除素材”，会真正删掉本机图片，并清空画布中引用它的节点。这是可以撤销的：按 <kbd>⌘Z</kbd> 能恢复节点里的图片引用。</p>
+          <p>如果只是想让某个节点不再用这张图，用节点右键的“清空生成结果”“移除图片”，或检查器缩略图右上角的删除按钮。素材仍留在素材库，随时可以再放回来。</p>
+        </section>
+
+        <section>
+          <span class="guide-no">07</span>
           <h3>保存、导出与备份</h3>
           <p>项目自动保存在浏览器 IndexedDB。导出 JSON 时，画布里用到的图片会以 data URL 一并打包，换一台机器也能完整还原。整幅画布 PNG、拼图 PNG、素材总览 PNG 都可以直接下载。</p>
           <p>清理浏览器站点数据会删除本地项目。重要的项目请定期导出 JSON。</p>
         </section>
 
         <section>
-          <span class="guide-no">07</span>
+          <span class="guide-no">08</span>
           <h3>键盘</h3>
           <div class="keys-table">
             <div><kbd>⌘K</kbd><span>命令面板</span></div>
             <div><kbd>⌘S</kbd><span>保存</span></div>
             <div><kbd>T / G / W / I</kbd><span>新增文本 / 生成 / 拼图 / 图片节点</span></div>
             <div><kbd>⌘G / ⇧⌘G</kbd><span>编组 / 解散编组</span></div>
-            <div><kbd>Alt + 点击</kbd><span>进入编组，只选一个节点</span></div>
+            <div><kbd>Alt + 点击</kbd><span>选中整组</span></div>
+            <div><kbd>双击组标题</kbd><span>重命名编组</span></div>
             <div><kbd>R</kbd><span>生成选中的节点</span></div>
             <div><kbd>⌘↵</kbd><span>生成全部</span></div>
             <div><kbd>F</kbd><span>适应画面</span></div>
@@ -94,7 +103,7 @@ export function openGuide(): void {
         </section>
 
         <section>
-          <span class="guide-no">08</span>
+          <span class="guide-no">09</span>
           <h3>一句话原则</h3>
           <p class="guide-quote">先把提示词写清楚，再让生成节点去试；一次只改一个变量。</p>
         </section>
