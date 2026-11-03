@@ -533,6 +533,7 @@ export class Editor {
       const node = this.node(id);
       if (!node) continue;
       if ((node.kind === 'image' || node.kind === 'clip') && node.assetId) ids.push(node.assetId);
+      if (node.kind === 'render') ids.push(...node.assetIds);
       if (node.kind === 'video') ids.push(...node.assetIds);
     }
     return [...new Set(ids)].slice(0, 4);

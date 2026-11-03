@@ -91,7 +91,7 @@ const ACCEPTS: Record<NodeKind, NodeKind[]> = {
   render: ['prompt'],
   image: [],
   weave: ['image', 'render'],
-  video: ['prompt', 'image', 'clip', 'video'],
+  video: ['prompt', 'render', 'image', 'clip', 'video'],
   clip: [],
 };
 

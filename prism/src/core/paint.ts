@@ -510,7 +510,7 @@ function referenceCount(doc: Doc, nodeId: ID): number {
   for (const thread of doc.threads) {
     if (thread.to !== nodeId) continue;
     const source = doc.nodes.find((node) => node.id === thread.from);
-    if (source && (source.kind === 'image' || source.kind === 'clip' || source.kind === 'video')) count += 1;
+    if (source && (source.kind === 'render' || source.kind === 'image' || source.kind === 'clip' || source.kind === 'video')) count += 1;
   }
   return count;
 }

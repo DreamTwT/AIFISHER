@@ -268,7 +268,7 @@ function referenceStrip(node: VideoNode, deps: InspectorDeps): HTMLElement {
     .incoming(node.id)
     .map((id) => editor.node(id))
     .filter((item): item is SceneNode => Boolean(item));
-  const media = refs.filter((item) => item.kind === 'image' || item.kind === 'clip' || item.kind === 'video');
+  const media = refs.filter((item) => item.kind === 'render' || item.kind === 'image' || item.kind === 'clip' || item.kind === 'video');
   if (!media.length) {
     strip.innerHTML = '<div class="reference-empty">接一张图片做图生视频；再接上提示词，就是图文生视频。</div>';
     return strip;
@@ -278,9 +278,13 @@ function referenceStrip(node: VideoNode, deps: InspectorDeps): HTMLElement {
     chip.type = 'button';
     chip.className = 'reference-chip';
     const assetId =
-      item.kind === 'image' || item.kind === 'clip' ? item.assetId : item.kind === 'video' ? item.assetIds[0] : undefined;
+      item.kind === 'image' || item.kind === 'clip'
+        ? item.assetId
+        : item.kind === 'render' || item.kind === 'video'
+          ? item.assetIds[0]
+          : undefined;
     const url =
-      item.kind === 'image' ? getAssetUrl(assetId) : getAssetPoster(assetId) ?? getAssetUrl(assetId);
+      item.kind === 'image' || item.kind === 'render' ? getAssetUrl(assetId) : getAssetPoster(assetId) ?? getAssetUrl(assetId);
     chip.innerHTML = `${url ? `<img alt="" src="${url}" />` : `<span>${NODE_LABEL[item.kind]}</span>`}<i>${NODE_LABEL[item.kind]}</i>`;
     chip.title = item.title || NODE_LABEL[item.kind];
     chip.addEventListener('click', () => {

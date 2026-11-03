@@ -122,11 +122,13 @@ describe('prism graph core', () => {
     const image = createNode('image', -300, 600, { assetId: 'img-1' });
     const clip = createNode('clip', 0, 600, { assetId: 'clip-1' });
     const video = createNode('video', 300, 0, { prompt: 'slow push in', aspect: '9:16', seconds: 8 });
-    project.doc.nodes.push(image, clip, video);
+    const generated = createNode('render', 600, 600, { assetIds: ['render-1'] });
+    project.doc.nodes.push(image, clip, video, generated);
     project.doc.threads.push(
       { id: 't-v1', from: prompt.id, to: video.id },
       { id: 't-v2', from: image.id, to: video.id },
       { id: 't-v3', from: clip.id, to: video.id },
+      { id: 't-v4', from: generated.id, to: video.id },
     );
     const editor = new Editor(project);
     expect(portVisible(video, 'in')).toBe(true);
@@ -135,7 +137,8 @@ describe('prism graph core', () => {
     expect(portVisible(clip, 'out')).toBe(true);
     expect(canLink(image, video)).toBe(true);
     expect(canLink(clip, video)).toBe(true);
-    expect(editor.referenceAssets(video.id)).toEqual(['img-1', 'clip-1']);
+    expect(canLink(generated, video)).toBe(true);
+    expect(editor.referenceAssets(video.id)).toEqual(['img-1', 'clip-1', 'render-1']);
     expect(editor.effectivePrompt(video.id)).toContain('slow push in');
     expect(editor.effectivePrompt(video.id)).toContain(prompt.text);
   });
