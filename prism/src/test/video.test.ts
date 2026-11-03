@@ -17,6 +17,12 @@ import { DEFAULT_MOTION_PROMPT } from '../core/modes';
 import { runVideo } from '../runtime/runner';
 import { renderSampleVideo } from '../runtime/demo';
 
+function videoNode(editor: Editor, id: string) {
+  const node = editor.node(id);
+  if (!node || node.kind !== 'video') throw new Error('video node missing');
+  return node;
+}
+
 function editorWithVideo(): { editor: Editor; videoId: string } {
   const editor = new Editor(starterProject());
   const video = editor.addNode('video', 700, 80, {}, false);
@@ -37,8 +43,8 @@ describe('video modes', () => {
 
     expect(renderSampleVideo).toHaveBeenCalledTimes(1);
     expect(vi.mocked(renderSampleVideo).mock.calls[0][0]).toBe(DEFAULT_MOTION_PROMPT);
-    expect(editor.node(videoId)?.status).toBe('done');
-    expect(editor.node(videoId)?.assetIds).toEqual(['a-video']);
+    expect(videoNode(editor, videoId).status).toBe('done');
+    expect(videoNode(editor, videoId).assetIds).toEqual(['a-video']);
   });
 
   it('reports an error when there is neither text nor a reference', async () => {
@@ -48,7 +54,7 @@ describe('video modes', () => {
     await runVideo(editor, videoId, { notify });
 
     expect(renderSampleVideo).not.toHaveBeenCalled();
-    expect(editor.node(videoId)?.status).toBe('error');
+    expect(videoNode(editor, videoId).status).toBe('error');
     expect(notify).toHaveBeenCalledWith(expect.stringContaining('写一句提示词'), 'error');
   });
 });
